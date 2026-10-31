@@ -47,9 +47,11 @@ test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前�
   const harness=await openPage();
   try {
     const shellFixture=await readFile(new URL('./fixtures/workbench-shell.html',import.meta.url),'utf8');
+    const assets={};
+    for(const pilot of ['asuka','rei'])assets[pilot+'Portrait']='data:image/png;base64,'+(await readFile(new URL(`../assets/images/${pilot}-portrait-lineart.png`,import.meta.url))).toString('base64');
     await harness.resize(1800,916);
     await harness.setHtml(shellFixture);
-    await harness.evaluate(`window.__EVA_ASSETS__={};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
+    await harness.evaluate(`window.__EVA_ASSETS__=${JSON.stringify(assets)};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
     for(const [width,panel] of [[1800,false],[1800,true],[1250,true],[900,false],[560,false]]){
       await harness.resize(width,916);
       await harness.evaluate(`document.querySelector('.aux').hidden=${!panel};new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
@@ -74,6 +76,9 @@ test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前�
     }
     for(const theme of ['light','dark']){
       await harness.evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)};new Promise(r=>requestAnimationFrame(r))`);
+      await harness.evaluate(`${shadow('.portrait')}.decode()`);
+      assert.equal(await harness.evaluate(`getComputedStyle(${shadow('.portrait')}).visibility`),'visible','actual character asset is visible');
+      assert.ok(await harness.evaluate(`${shadow('.portrait')}.naturalWidth`)>0,'actual character asset decoded');
       assert.equal(await harness.evaluate(`${shadow('.geometry svg')}.getAttribute('viewBox')`),'0 0 600 600','original unit artwork retains its view box');
       assert.match(await harness.evaluate(`${shadow('.geometry')}.textContent`),theme==='light'?/FIRST CHILD/:/SECOND CHILD/);
     }

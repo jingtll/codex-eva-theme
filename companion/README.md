@@ -141,3 +141,5 @@ $env:EVA_BROWSER_ENDPOINT="http://127.0.0.1:19433"; npm run test:browser
 | `assets/`、`NOTICE.md` | 迁移素材、来源与 SHA-256 |
 
 素材许可见 [NOTICE.md](NOTICE.md)。
+
+人物与机体纹样使用原版的大幅构图：人物位于工作台左侧，按可用宽高等比缩放；独立的绫波丽圆环或明日香多边形纹样位于右侧，可延伸到仪表面板背后。面板保持原布局，装饰避开输入区。实现与验收范围见 [构图验证记录](../docs/validation/2026-10-31-reference-art-layout.md)。
