@@ -1,0 +1,27 @@
+{
+  "name": "codex-eva-theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "EVA 配色与字体的 Codex 外观主题：只走官方外观通道，不注入、不改包",
+  "keywords": [
+    "codex",
+    "codex-app",
+    "theme",
+    "eva",
+    "evangelion",
+    "nerv",
+    "asuka",
+    "rei"
+  ],
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "check": "node tools/build.mjs --check",
+    "verify": "node tools/verify.mjs",
+    "test": "npm run check && npm run verify"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

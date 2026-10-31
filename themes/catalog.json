@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "themes": [
+    {
+      "id": "asuka-dark",
+      "file": "asuka-dark.json",
+      "variant": "dark",
+      "settingsKey": "appearanceDarkChromeTheme",
+      "pilot": {
+        "name": "明日香",
+        "en": "ASUKA LANGLEY",
+        "code": "02"
+      }
+    },
+    {
+      "id": "rei-light",
+      "file": "rei-light.json",
+      "variant": "light",
+      "settingsKey": "appearanceLightChromeTheme",
+      "pilot": {
+        "name": "绫波丽",
+        "en": "REI AYANAMI",
+        "code": "00"
+      }
+    }
+  ]
+}
