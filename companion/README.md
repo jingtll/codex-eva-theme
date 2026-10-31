@@ -2,7 +2,7 @@
 
 给 Codex 工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
 
-当前使用新增的 **Codex EVA** 快捷方式启动官方客户端及伴随程序。原 MSIX 图标保留，普通启动不带调试端口，因此没有皮肤。首次使用前请先保存工作并完全退出正在普通模式运行的 Codex；启动器会提示这一点，不会替你关闭聊天。
+当前使用新增的 **Codex EVA** 快捷方式直接启动官方客户端，伴随程序独立运行。原 MSIX 图标保留，普通启动不带调试端口，因此没有皮肤。首次使用前请先保存工作并完全退出正在普通模式运行的 Codex。新快捷方式不经过脚本检查，也不会提示或替你关闭聊天；已有普通实例可能直接复用，无法因此补开端口。
 
 启动 Codex 后，伴随程序开机驻留托盘，检测到本机调试端点就接入；没有就显示「等待 Codex 调试入口」。
 
@@ -17,19 +17,26 @@
 在仓库根目录运行一次安装（Windows PowerShell 5.1）：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion"
+powershell -NoProfile -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion"
 ```
 
-之后打开 `companion\Codex EVA.lnk`。启动器每次通过当前用户的 MSIX 包定位安装路径，不固定版本目录；自有图标缓存避免图标依赖旧安装目录。快捷方式和图标记录哈希，重复安装不覆盖用户修改，卸载从收据读取原目录并清理。
+之后打开 `companion\Codex EVA.lnk`。快捷方式直接指向安装时发现的官方 `ChatGPT.exe`，参数只有调试端口及 loopback 地址，不再运行隐藏 PowerShell 或覆盖执行策略。它不负责启动伴随程序：安装注册的是下次登录自启，本次可另开终端运行 `npm start --prefix companion`；关闭该控制台会停止伴随程序。
 
-不指定 `-ShortcutDirectory` 时默认生成到桌面。本机实测桌面入口创建后约 3 秒会被未知外部机制移除，因此实际安装在项目目录；该入口已跨多次调用验证持续存在。尚未找到桌面移除来源，没有更改安全设置。
+不指定 `-ShortcutDirectory` 时默认生成到桌面。本机旧入口被火绒判为 `TrojanDownloader/LNK.Agent.g` 并删除，换目录并未解决。本轮新入口和伴随程序目录经火绒自定义扫描：78 个对象，风险 0 个；扫描后入口仍在。该结果不代表点击启动及后续行为均已验收。没有关闭防护或添加信任。
 
-仅创建或移除快捷方式、不修改开机启动项时，分别运行 `companion\windows\shortcut.ps1` 或加 `-Remove`。新快捷方式会自行启动伴随程序。
+快捷方式和图标记录哈希，卸载从收据读取原目录，保留用户修改。仅创建或移除入口、不修改开机启动项时，分别运行 `companion\windows\shortcut.ps1`（可带 `-ShortcutDirectory`）或加 `-Remove`。
+
+官方更新后路径可能变化。重新运行创建脚本会检测过期入口并报 `SHORTCUT_REFRESH_REQUIRED`；先运行下列命令移除匹配的自有入口，再重复安装命令生成当前版本入口。此过程也用于仍存在的旧版脚本入口，不会自动恢复旧版准备态快捷方式。
+
+```powershell
+powershell -NoProfile -File companion\windows\shortcut.ps1 -Remove
+```
 
 用带调试参数的方式启动（需先完全退出已运行的 Codex）：
 
 ```powershell
-& "$env:LOCALAPPDATA\Programs\ChatGPT\ChatGPT.exe" --remote-debugging-port=19327 --remote-debugging-address=127.0.0.1
+$package = Get-AppxPackage -Name OpenAI.Codex
+& (Join-Path $package.InstallLocation 'app\ChatGPT.exe') --remote-debugging-port=19327 --remote-debugging-address=127.0.0.1
 ```
 
 实际路径以 `node src/diagnose.mjs` 输出的发现结果为准。若想从快捷方式启动，请**先备份原快捷方式**再修改其“目标”字段。
@@ -64,15 +71,15 @@ npm start
 ## 安装开机自启
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\install.ps1
+powershell -NoProfile -File companion\windows\install.ps1
 ```
 
-安装检查 `src/main.mjs` 与 Node 22+，先保存安装收据，再在当前用户 `Run` 键注册隐藏启动脚本。收据含启动项原值与命令。重复安装会核对实际启动项；用户已改过时拒绝覆盖。伴随程序可以先于 Codex 启动，随后发现端口并检查资源指纹。
+安装检查 `src/main.mjs` 与 Node 22+，先保存安装收据，再在当前用户 `Run` 键注册直接启动 Node 的命令，不经过 PowerShell。登录时可能显示 Node 控制台，关闭它会停止伴随程序。收据含启动项原值与命令；可将匹配的旧版隐藏脚本命令迁移为新命令，首次安装前的原值保持不变。用户已改过时拒绝覆盖。伴随程序可以先于 Codex 启动，随后发现端口并检查资源指纹。
 
 ## 卸载 / 恢复
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\uninstall.ps1
+powershell -NoProfile -File companion\windows\uninstall.ps1
 ```
 
 卸载先通知伴随程序干净退出（暂停时同样有效），再删除 `settings.json` 与收据。启动项仍与收据一致时恢复安装前的值，原来没有值则删除；用户后改的值保留。Codex 的会话、凭据和项目文件不受影响。
