@@ -10,6 +10,7 @@
 :host{container-type:size;container-name:eva-workbench;overflow:hidden}
 :host([data-surface=missing]){display:none!important}
 .portrait{left:16px;bottom:16px;width:min(28%,300px);height:min(50%,400px)}
+:host([data-pilot=asuka]) .portrait{opacity:clamp(0,calc(var(--strength)*3.6),.85);filter:url(#codex-eva-asuka-ink)}
 .geometry{left:16px;bottom:16px;width:min(28%,280px);height:auto;aspect-ratio:1}
 .unit{font-size:clamp(48px,12cqw,140px)}
 .unit-label{font-size:clamp(6px,.7cqw,10px);letter-spacing:1px;max-width:calc(100% - 24px);overflow:hidden;white-space:nowrap}

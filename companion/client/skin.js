@@ -7,6 +7,13 @@
   const assets = window.__EVA_ASSETS__ || {};
   const root = document.createElement('div'); root.id = 'codex-eva-root'; root.dataset.surface='missing';
   const shadow = root.attachShadow({mode:'open'});
+  // The source portrait is black alpha linework. Recolour the actual alpha
+  // silhouette and expand it slightly; a drop shadow only colours the halo.
+  const portraitInk=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  portraitInk.setAttribute('width','0');portraitInk.setAttribute('height','0');portraitInk.setAttribute('aria-hidden','true');
+  portraitInk.style.position='absolute';
+  portraitInk.innerHTML='<defs><filter id="codex-eva-asuka-ink" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="0.75" result="ink"/><feFlood flood-color="#d9364b"/><feComposite in2="ink" operator="in"/></filter></defs>';
+  shadow.append(portraitInk);
   const style = document.createElement('style'); style.textContent = window.__EVA_CSS__ || '';
   shadow.append(style);
   const shell = document.createElement('div'); shell.className='shell';

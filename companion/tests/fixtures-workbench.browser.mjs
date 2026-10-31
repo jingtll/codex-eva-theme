@@ -10,10 +10,38 @@ const skinJs = await readFile(new URL('../client/skin.js', import.meta.url), 'ut
 const ROOT = '#codex-eva-root';
 const shadow = (selector) => `document.querySelector('${ROOT}').shadowRoot${selector ? `.querySelector('${selector}')` : '.textContent'}`;
 
-async function mount(harness, { theme = 'dark' } = {}) {
+async function mount(harness, { theme = 'dark', assets = {} } = {}) {
   await harness.setHtml(fixture.replace('data-theme="dark"', `data-theme="${theme}"`));
-  await harness.evaluate(`window.__EVA_ASSETS__={};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
+  await harness.evaluate(`window.__EVA_ASSETS__=${JSON.stringify(assets)};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
 }
+
+test('深色人物显示清晰加粗的红线，浅色人物与背景强度开关保持原有行为', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
+  const harness=await openPage();
+  const line=color=>'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><path d="M150 20V380" stroke="${color}" stroke-width="2"/></svg>`);
+  try {
+    await harness.resize(1800,916);
+    await mount(harness,{assets:{asukaPortrait:line('black'),reiPortrait:line('black')}});
+    const settle=()=>harness.evaluate(`Promise.all([...document.querySelector('${ROOT}').shadowRoot.querySelectorAll('img')].filter(i=>i.src).map(i=>i.decode().catch(()=>{}))).then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))`);
+    const redPixels=async()=>{
+      await settle();
+      const box=await harness.evaluate(`${shadow('.portrait')}.getBoundingClientRect().toJSON()`);
+      const shot=await harness.page.send('Page.captureScreenshot',{format:'png',clip:{x:box.x,y:box.y,width:box.width,height:box.height,scale:1}});
+      return harness.evaluate(`(async()=>{const image=new Image();image.src=${JSON.stringify('data:image/png;base64,'+shot.data)};await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;let red=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]>80&&pixels[i]>pixels[i+1]*1.8&&pixels[i]>pixels[i+2]*1.5)red++;return red})()`);
+    };
+    // Compare the rendered outline against a known plain red 2px line.
+    await harness.evaluate(`${shadow('.portrait')}.src=${JSON.stringify(line('#d9364b'))};${shadow('.portrait')}.style.filter='none';${shadow('.portrait')}.style.opacity='0.65'`);
+    const plain=await redPixels();
+    assert.ok(plain>100,'plain reference stroke is visible');
+    await harness.evaluate(`${shadow('.portrait')}.src=${JSON.stringify(line('black'))};${shadow('.portrait')}.style.removeProperty('filter');${shadow('.portrait')}.style.removeProperty('opacity')`);
+    const bold=await redPixels();
+    assert.ok(bold>plain*1.35,`dark portrait has clear, thicker red ink (${bold} versus ${plain} reference pixels)`);
+    await harness.evaluate('document.documentElement.dataset.theme="light";new Promise(r=>requestAnimationFrame(r))');
+    assert.equal(await harness.evaluate(`Number(getComputedStyle(${shadow('.portrait')}).opacity)`),0.18,'light portrait retains its original strength');
+    await harness.evaluate('document.documentElement.dataset.theme="dark";new Promise(r=>requestAnimationFrame(r))');
+    await harness.evaluate('window.__codexEva.setSettings({backgroundStrength:0})');
+    assert.equal(await harness.evaluate(`Number(getComputedStyle(${shadow('.portrait')}).opacity)`),0,'zero background strength still hides the portrait');
+  } finally { await harness.close(); }
+});
 
 test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前输入区', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
   const harness=await openPage();
