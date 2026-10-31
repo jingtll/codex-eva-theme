@@ -124,3 +124,19 @@ test('unknown thread sources report limited compatibility and do not play a cue'
   assert.equal(cues.length,0);
   await session.close();
 });
+
+test('closing a session waits for an in-flight preference save before uninstall can remove settings', async () => {
+  const cdp=fakeCdp();
+  let release,started;
+  const saving=new Promise(resolve=>{release=resolve});
+  const began=new Promise(resolve=>{started=resolve});
+  const session=await attach(cdp,{setSettings:async()=>{started();await saving;}});
+  cdp.emit('Runtime.executionContextCreated',contextCreated(1));
+  cdp.emit('Runtime.bindingCalled',{name:'__evaCommand',executionContextId:1,payload:JSON.stringify({action:'settings',settings:{volume:0.2}})});
+  await began;
+  let closed=false;
+  const closing=session.close().then(()=>{closed=true});
+  await new Promise(resolve=>setImmediate(resolve));
+  try { assert.equal(closed,false,'uninstall must wait until the pending save is drained'); }
+  finally { release();await closing; }
+});

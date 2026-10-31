@@ -201,7 +201,6 @@ export async function startCompanion(options = {}) {
     settings = sanitizeSettings(patch, settings);
     await writeJson(settingsPath, settings).catch(() => {});
     await sessionRef?.syncSettings?.(patch).catch(() => {});
-    publish({ type: 'status', text: state === 'paused' ? '已暂停' : '已连接' });
     return settings;
   }
 

@@ -47,6 +47,19 @@ function Read-Receipt {
   try { return Get-Content -LiteralPath $ReceiptPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
 }
 
+function Write-ReceiptAtomically($Value) {
+  $Temporary = Join-Path $DataDir ('install-receipt.' + [Guid]::NewGuid().ToString('N') + '.tmp')
+  try {
+    [IO.File]::WriteAllText($Temporary, ($Value | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
+    if (Test-Path -LiteralPath $ReceiptPath -PathType Leaf) { [IO.File]::Replace($Temporary, $ReceiptPath, ($Temporary + '.bak')) }
+    else { [IO.File]::Move($Temporary, $ReceiptPath) }
+  } finally {
+    foreach ($OwnedTemporary in @($Temporary, ($Temporary + '.bak'))) {
+      if (Test-Path -LiteralPath $OwnedTemporary -PathType Leaf) { Remove-Item -LiteralPath $OwnedTemporary -Force }
+    }
+  }
+}
+
 $Existing = Read-Receipt
 $ExistingValue = $null
 if ($null -ne $Existing -and $null -ne $Existing.registry) { $ExistingValue = [string]$Existing.registry.command }
@@ -73,7 +86,7 @@ if ($Uninstall) {
 
   if ($null -eq $CurrentValue) {
     Write-Output 'REG-OK: registry value already absent'
-  } elseif ($CurrentValue -ne $ExistingValue) {
+  } elseif ($CurrentValue -ne $ExistingValue -and -not ($Existing.phase -eq 'prepared' -and $CurrentValue -eq $Existing.registry.beforeValue)) {
     # The user (or another tool) changed the entry: leave their value alone.
     Write-Output 'REG-OK: user value kept'
   } else {
@@ -112,13 +125,11 @@ $CurrentValue = $null
 try { $CurrentValue = (Get-ItemProperty -Path $RunKey -Name $RunName -ErrorAction Stop).$RunName } catch { }
 $PreviousValue = $CurrentValue
 if ($null -ne $Existing) {
-  if ($null -ne $CurrentValue -and $CurrentValue -ne $ExistingValue) { throw 'REGISTRY_CONFLICT: 启动项已被修改，拒绝覆盖。' }
+  if ($null -ne $CurrentValue -and $CurrentValue -ne $ExistingValue -and -not ($Existing.phase -eq 'prepared' -and $CurrentValue -eq $Existing.registry.beforeValue)) { throw 'REGISTRY_CONFLICT: 启动项已被修改，拒绝覆盖。' }
   $PreviousValue = $Existing.registry.previousValue
 }
 
-if ($CurrentValue -eq $Command) {
-  Write-Output 'REG-OK: already up to date'
-} else {
+if ($CurrentValue -ne $Command) {
   if (-not (Test-Path -LiteralPath $RunKey)) {
     New-Item -Path (Split-Path -Parent $RunKey) -Name (Split-Path -Leaf $RunKey) -Force | Out-Null
   }
@@ -126,19 +137,36 @@ if ($CurrentValue -eq $Command) {
     Write-Error "无法创建启动项容器：$RunKey"
     exit 5
   }
-  Set-ItemProperty -Path $RunKey -Name $RunName -Value $Command
-  Write-Output "REG-OK: command = $Command"
 }
 
 $Receipt = [ordered]@{
   version     = 1
+  phase       = 'prepared'
   installedAt = (Get-Date).ToUniversalTime().ToString('o')
   companion   = $CompanionRoot
   node        = $Node
-  registry    = [ordered]@{ hive = 'HKCU'; key = 'Software\Microsoft\Windows\CurrentVersion\Run'; name = $RunName; command = $Command; previousValue = $PreviousValue }
+  registry    = [ordered]@{ hive = 'HKCU'; key = 'Software\Microsoft\Windows\CurrentVersion\Run'; name = $RunName; command = $Command; beforeValue = $CurrentValue; previousValue = $PreviousValue }
 }
-# Windows PowerShell 5.1's "UTF8" writes a BOM; the companion parses the receipt
-# with JSON.parse, which rejects one, so write BOM-free UTF-8 explicitly.
-[System.IO.File]::WriteAllText($ReceiptPath, ($Receipt | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
+# The prepared receipt preserves both sides of an interrupted registry update.
+Write-ReceiptAtomically $Receipt
+try {
+  if ($CurrentValue -eq $Command) { Write-Output 'REG-OK: already up to date' }
+  else {
+    Set-ItemProperty -Path $RunKey -Name $RunName -Value $Command -ErrorAction Stop
+    Write-Output "REG-OK: command = $Command"
+  }
+  $Receipt.phase = 'committed'
+  Write-ReceiptAtomically $Receipt
+} catch {
+  $FailedValue = $null
+  try { $FailedValue = (Get-ItemProperty -Path $RunKey -Name $RunName -ErrorAction Stop).$RunName } catch { }
+  if ($FailedValue -eq $Command) {
+    if ($null -ne $CurrentValue) { Set-ItemProperty -Path $RunKey -Name $RunName -Value $CurrentValue }
+    else { Remove-ItemProperty -Path $RunKey -Name $RunName -ErrorAction SilentlyContinue }
+  }
+  if ($null -ne $Existing) { Write-ReceiptAtomically $Existing }
+  else { Remove-Item -LiteralPath $ReceiptPath -Force }
+  throw
+}
 Write-Output "安装收据：$ReceiptPath"
 Write-Output '伴随程序已注册自启；只有检测到本机调试入口及已验证版本后才会接入。'

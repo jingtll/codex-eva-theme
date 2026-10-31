@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -167,4 +167,38 @@ test('uninstaller stops a running paused companion before removing its settings'
   await runtime.stop();
   await assert.rejects(readFile(file),/ENOENT/);
   await assert.rejects(readFile(`${file}.lock`),/ENOENT/);
+});
+
+test('a receipt write failure restores the startup entry that existed before installation', async t => {
+  if (!(await hasRegistryWrite())) {t.skip('registry writes are blocked in this shell');return;}
+  const original=await registryValue();
+  const home=await mkdtemp(join(tmpdir(),'eva-install-failure-'));
+  t.after(async()=>{await setRegistryValue(original);await rm(home,{recursive:true,force:true});});
+  await setRegistryValue(userEntry);
+  await mkdir(join(home,'AppData','Roaming','CodexEva','install-receipt.json'),{recursive:true});
+  await assert.rejects(runInstall(home));
+  assert.equal(await registryValue(),userEntry);
+});
+
+test('uninstall recovers the original startup value after an upgrade stops before the registry commit', async t => {
+  if (!(await hasRegistryWrite())) {t.skip('registry writes are blocked in this shell');return;}
+  const original=await registryValue();
+  const home=await mkdtemp(join(tmpdir(),'eva-upgrade-interrupted-'));
+  t.after(async()=>{await setRegistryValue(original);await rm(home,{recursive:true,force:true});});
+  await setRegistryValue(userEntry);
+  await runInstall(home);
+  const receipt=await readReceipt(home);
+  const oldCommand=receipt.registry.command+' --old';
+  const prepared={...receipt,phase:'prepared',registry:{...receipt.registry,beforeValue:oldCommand,command:receipt.registry.command}};
+  await setRegistryValue(oldCommand);
+  await writeFile(join(home,'AppData','Roaming','CodexEva','install-receipt.json'),JSON.stringify(prepared));
+  await runInstall(home);
+  const recovered=await readReceipt(home);
+  assert.equal(recovered.phase,'committed');
+  assert.equal(recovered.registry.previousValue,userEntry);
+  assert.equal(await registryValue(),receipt.registry.command);
+  await setRegistryValue(oldCommand);
+  await writeFile(join(home,'AppData','Roaming','CodexEva','install-receipt.json'),JSON.stringify(prepared));
+  await runInstall(home,uninstallScript);
+  assert.equal(await registryValue(),userEntry);
 });

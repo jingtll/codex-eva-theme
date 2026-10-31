@@ -30,13 +30,16 @@ test('real main, session and bundle connect, reload, pause, resume and clean up 
   assert.equal(await page.evaluate('!!window.__codexEva'), true);
   await page.evaluate('new Promise(r=>setTimeout(r,30))');
   assert.match(await page.evaluate('document.querySelector("#codex-eva-root").shadowRoot.textContent'), /37%/);
+  assert.ok(messages.some(message => /皮肤已加载/.test(message.text) && /额度已联动/.test(message.text)), 'status distinguishes transport, skin and host quota readiness');
   await runtime.updateSettings({volume:0.23});
+  assert.match(messages.at(-1).text, /皮肤已加载/, 'saving preferences must not overwrite capability diagnostics');
   await page.page.send('Page.reload');
   for (let i=0;i<50;i++) {
     if (await page.evaluate('!!window.__codexEva').catch(()=>false)) break;
     await new Promise(resolve=>setTimeout(resolve,20));
   }
   assert.equal(await page.evaluate('!!window.__codexEva'), true, JSON.stringify(await page.evaluate('({html:document.body?.innerHTML,bridge:!!window.electronBridge,install:!!window.__evaInstall})')));
+  assert.equal(await page.evaluate('window.__codexEva.getSettings().volume'), 0.23, 'reload keeps the settings saved after initial attachment');
   await runtime.pause();
   assert.equal(await page.evaluate('!!document.querySelector("#codex-eva-root")'), false);
   await runtime.resume();
