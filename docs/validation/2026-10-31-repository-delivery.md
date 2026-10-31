@@ -2,7 +2,7 @@
 
 ## 范围
 
-远程默认分支为 `main`。整理前远程仅有初始化基线，本地 `fix/native-companion-startup` 已有 38 个未推送提交；本次从该依赖分支创建 `chore/repository-delivery`，保留原有提交历史，并补交主题源数据、分享文件、构建校验工具及原生桌面启动修复。
+远程默认分支为 `main`。整理前远程仅有初始化基线，本地 `fix/native-companion-startup` 已有 39 个未推送提交（通过 `git rev-list --count origin/main..9659521` 核对）；本次从该依赖分支创建 `chore/repository-delivery`，保留原有提交历史，并补交主题源数据、分享文件、构建校验工具及原生桌面启动修复。
 
 首页同时说明外观主题和 Windows 伴随程序，避免仅描述配色而遗漏已经实现的工作台功能。`share/` 是供用户直接导入的交付文件，需要提交；`dist/` 是构建报告，继续忽略。
 
