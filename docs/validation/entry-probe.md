@@ -20,7 +20,7 @@
 
 ## 2026-10-31 复核
 
-- 安装包又升级：文件版本 `156.0.8078.48`，内部应用 `26.1027.30824`，指纹 `2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1`。确认入口文件仍需动态发现：本版本 `main` 打包名不再匹配 `main[-.].js`，`diagnose` 对 `mainBundle` 报 `false`，但 `early-bootstrap`、`preload`、`webview` 三项仍在。
+- 安装包又升级：文件版本 `156.0.8078.48`，内部应用 `26.1027.30824`。当前指纹：`2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1`（`src/adapters/` 以此识别本版本；指纹变化即视为未验证版本）。确认入口文件仍需动态发现：本版本 `main` 打包名不再匹配 `main[-.].js`，`diagnose` 对 `mainBundle` 报 `false`，但 `early-bootstrap`、`preload`、`webview` 三项仍在。
 - fuse 复核（`chrome.dll` 只读）：`embeddedAsarIntegrityValidation=true`、`onlyLoadAppFromAsar=true`、`nodeOptions=false`、`nodeCliInspect=false`。结论不变：不能重写 ASAR 作为加载方式。
 - 普通启动仍未带调试开关。伴随程序的接入路径因此要求用带 `--remote-debugging-port` 的方式启动 Codex；这一点已写入 [验收记录](acceptance.md) 的「已知阻碍」。
 - 本机 CDP 目标发现已实现为 `findCodexTarget()`：只接受 `app://-/index.html` 这一主页面目标，且调试套接字必须是本机 loopback；登录页、插件 iframe 与非 loopback 套接字一律拒绝。有单元测试覆盖，尚未在真实 Codex 实例上验收。

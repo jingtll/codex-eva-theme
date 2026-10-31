@@ -14,6 +14,12 @@
 
   const emit = value => { try { window.__evaHostEvent(JSON.stringify(value)); } catch {} };
 
+  // Method names come from the version adapter the node selected for this
+  // fingerprint; hard-coded names would only ever match one Codex build.
+  const host = window.__EVA_HOST__ || {};
+  const methods = host.methods || {};
+  const approvalSuffixes = host.approvalSuffixes || ['/requestApproval', '/requestUserInput'];
+
   async function request(method, params, hostId = 'local') {
     if (stopped) throw Error('CLOSED');
     const id = `codex-eva:${uniqueId()}:${++next}`;
@@ -52,7 +58,7 @@
   async function metadata(hostId, threadId) {
     if (typeof threadId !== 'string') return;
     try {
-      const result = await request('thread/read', { threadId, includeTurns: false }, hostId);
+      const result = await request(methods.threadRead, { threadId, includeTurns: false }, hostId);
       emit({ type: 'thread-source', hostId, threadId, source: result?.thread?.source });
     } catch {}
   }
@@ -73,22 +79,23 @@
     const method = data.method || data.request?.method;
     const params = data.params || data.request?.params || {};
     const hostId = data.hostId || 'local';
-    if (method === 'account/updated' || method === 'account/login/completed') {
+    if (method === methods.accountChanged || method === methods.loginCompleted) {
       // A different account invalidates any in-flight answer for the old one.
       epoch++; emit({ type: 'account-changed' }); schedule(0); return;
     }
-    if (method === 'account/rateLimits/updated') { epoch++; emit({ type: 'quota', payload: params }); return; }
+    if (method === methods.quotaPush) { epoch++; emit({ type: 'quota', payload: params }); return; }
     // The host may tell us how long to wait after throttling a request.
-    if (method === 'account/rateLimits/rateLimited' || method?.endsWith('/tooManyRequests')) {
+    if (method === methods.rateLimited) {
       const seconds = Number(params.retryAfterSeconds ?? params.retry_after_seconds ?? params.retryAfter);
       if (Number.isFinite(seconds) && seconds > 0) hintRetrySeconds = seconds;
       return;
     }
-    if (method === 'thread/started') {
+    if (method === methods.threadStarted) {
       emit({ type: 'thread-source', hostId, threadId: params.thread?.id, source: params.thread?.source });
       return;
     }
-    if (method !== 'turn/completed' && !method?.endsWith('/requestApproval') && !method?.endsWith('/requestUserInput')) return;
+    const isApproval = approvalSuffixes.some((suffix) => method?.endsWith(suffix));
+    if (method !== methods.turnCompleted && !isApproval) return;
     // Read metadata without turns. Never forward message content or tool arguments.
     await metadata(hostId, params.threadId);
     emit({
@@ -115,7 +122,7 @@
     inFlight = true;
     const generation = epoch;
     try {
-      const payload = await request('account/rateLimits/read', null);
+      const payload = await request(methods.quotaRead, null);
       if (generation === epoch) { failures = 0; retryAt = 0; emit({ type: 'quota', payload }); }
     } catch (error) {
       const hinted = Number.isFinite(hintRetrySeconds) && hintRetrySeconds > 0 ? hintRetrySeconds * 1000 : 0;
@@ -162,6 +169,7 @@
   window.__evaQuota = { refresh };
   window.__evaAdapter = {
     refresh,
+    adapterId: host.id || null,
     dispose() {
       stopped = true;
       clearTimeout(timer);

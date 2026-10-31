@@ -2,12 +2,13 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildBundle } from './bundle.mjs';
-import { findCodexTarget } from './discovery.mjs';
+import { discoverCodexAsar, findCodexTarget } from './discovery.mjs';
 import { createNotifier } from './events.mjs';
 import { createLifecycle } from './lifecycle.mjs';
 import { attachSession } from './session.mjs';
 import { createMediaBridge } from './media.mjs';
 import { playCue, stopSounds } from './sound.mjs';
+import { selectAdapter } from './adapters/index.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const TRAY_SCRIPT = join(ROOT, 'windows', 'tray.ps1');
@@ -149,6 +150,10 @@ export async function startCompanion(options = {}) {
     // Port the user launched Codex with (--remote-debugging-port). Read from the
     // environment so the default discovery call actually has somewhere to look.
     debugPort = Number(process.env.CODEX_EVA_DEBUG_PORT) || null,
+    // Resource fingerprint of the running client and the probe record that
+    // lists which adapter it was verified against.
+    fingerprint = null,
+    probeRecordPath = join(ROOT, '..', 'docs', 'validation', 'entry-probe.md'),
     now = () => Date.now(),
   } = options;
 
@@ -204,9 +209,14 @@ export async function startCompanion(options = {}) {
       return null;
     },
     attach: async (target) => {
+      const hostAdapter = await resolveHostAdapter();
+      if (hostAdapter.status !== 'verified') {
+        publish({ type: 'status', text: hostAdapter.reason });
+        throw Error('ADAPTER_UNSUPPORTED');
+      }
       const session = await attachImpl({
         target,
-        bundle: await buildBundleImpl(settings),
+        bundle: await buildBundleImpl(settings, hostAdapter.adapter),
         media,
         notifier,
         getSettings: () => settings,
@@ -229,12 +239,21 @@ export async function startCompanion(options = {}) {
     onStatus: (text) => publish({ type: 'status', text }),
   });
 
+  async function resolveHostAdapter() {
+    let probeRecord = '';
+    try { probeRecord = await readFile(probeRecordPath, 'utf8'); } catch { probeRecord = ''; }
+    return selectAdapter({ fingerprint, probeRecord });
+  }
+
   async function cycle() {
     if (state !== 'running') return;
     // The loop owns failure reporting: a dropped connection is retried on the
     // next poll, but an unexpected attach failure is surfaced instead of
     // leaving the tray stuck on the previous status forever.
-    await lifecycle.update().catch((error) => publish({ type: 'status', text: `连接失败：${error?.message || '未知错误'}` }));
+    await lifecycle.update().catch((error) => {
+      const text = error?.message === 'ADAPTER_UNSUPPORTED' ? '当前 Codex 版本未验证，未接入' : `连接失败：${error?.message || '未知错误'}`;
+      publish({ type: 'status', text });
+    });
   }
 
   function schedule() {
@@ -298,7 +317,9 @@ export async function startCompanion(options = {}) {
       if (runScript && process.platform === 'win32') {
         trayChannel = openTrayChannel({ runScript, onAction: (line) => { handleTray(line).catch(() => {}); } });
       }
-      await cycle().catch(() => {});
+      // Track the first cycle separately so a failed start (e.g. an unsupported
+      // client version) still returns a stoppable instance, and say why.
+      await Promise.race([cycle(), new Promise((resolve) => setTimeout(resolve, 5000))]).catch(() => {});
       schedule();
       return instance;
     },
@@ -322,10 +343,23 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === (await import('node:pa
   // Only one companion should ever own a page. Concurrent starts serialize on a
   // second copy of the settings file, so the second instance reports that
   // another companion is running instead of attaching twice.
+  // Discover the installed client once so the adapter can be matched to its
+  // resource fingerprint; without one the companion refuses to attach.
+  let fingerprint = null;
+  try {
+    const discovered = await discoverCodexAsar();
+    if (discovered.status === 'found') {
+      const probe = await import('./diagnose-fingerprint.mjs');
+      fingerprint = await probe.resourceFingerprint(discovered.asarPath);
+    }
+  } catch {
+    fingerprint = null;
+  }
   const instance = await startCompanion({
+    fingerprint,
     runScript: (command, args, opts) => spawn(command, args, { ...opts, cwd: ROOT }),
   });
-  instance.publish({ type: 'status', text: '伴随程序正在等待 Codex' });
+  instance.publish({ type: 'status', text: fingerprint ? '伴随程序正在等待 Codex' : '未识别 Codex 版本，已停用接入' });
   const shutdown = () => { instance.stop().finally(() => process.exit(0)); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);

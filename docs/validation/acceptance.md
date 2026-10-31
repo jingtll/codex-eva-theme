@@ -14,7 +14,7 @@
 
 ## 一、契约测试：通过
 
-`cd companion && npm test` → 63 项，62 通过，1 跳过（浏览器夹具，需 `EVA_BROWSER_ENDPOINT`）。覆盖范围：
+`cd companion && npm test` → 76 项，75 通过，1 跳过（浏览器夹具，需 `EVA_BROWSER_ENDPOINT`）。覆盖范围：
 
 | 模块 | 验证的行为 |
 | --- | --- |
@@ -23,6 +23,8 @@
 | `integration` | 备份与收据、二次安装、失败恢复；**升级后文件已变，恢复被 `PATCH_RESTORE_CONFLICT` 拒绝** |
 | `quota` | null/缺失百分比不显示 100%、越界夹取、多桶不合并、现代格式优先于旧格式 |
 | `events` / `host` | 同一事件只提醒一次、子任务与未知来源不提醒、失败与取消不当作完成 |
+| `adapters` | 只有记录中的当前指纹才选中适配器；未知/缺失指纹一律 `unsupported`，不沿用已验证偏移 |
+| `session` | 导航后重新指向新执行上下文并回推设置；其他 frame 与非默认上下文被忽略；关闭后无残留绑定与脚本 |
 | `media` / `sound` | 非白名单动作与含分隔符的来源 ID 被拒且不写请求；超时进程被杀且迟到响应被忽略；只播放四个固定文件 |
 | `main` | 无 Codex 时不连接不轮询；暂停关闭连接、恢复只重连一次、停止后无残留；设置校验与持久化；坏设置文件回退默认；托盘只接受固定命令；断线重连不叠加会话；单实例锁与 stale 锁接管 |
 | `install` | PowerShell 脚本 AST 解析；安装收据只含相对路径与哈希；卸载只列未改动文件 |
@@ -41,7 +43,8 @@ WSL/Git Bash 下的已知环境限制：此处 `powershell.exe` 无法加载 `Mi
 - 设置面板打开、背景强度生效；
 - 宿主 `dialog.showModal()` 出现时整个皮肤隐藏，关闭后恢复；
 - 700px 窄窗口下宿主的「批准操作」按钮在几何中心可被命中（装饰层不拦截点击）；
-- `dispose()` 后根节点移除、宿主按钮仍可用。
+- `dispose()` 后根节点移除、宿主按钮仍可用；
+- 额度 adapter（`tests/adapter.browser.mjs`）：加载时抓取一次；隐藏时不请求；隐藏→可见立即请求（加载时即隐藏的标签页也一样）；失败后按服务端提示的时长等待，期间不漏刷；`dispose()` 后页面入口全部消失。
 
 截图：`.cache/screenshots/eva-rei.png`（绫波丽，700px 窄窗口）。
 
@@ -75,4 +78,6 @@ WSL/Git Bash 下的已知环境限制：此处 `powershell.exe` 无法加载 `Mi
 - **已修**：`startCompanion` 调用目标发现时没有传端口，默认路径必然返回 `port_not_configured`，运行时永远连不上；现有测试因注入假 `findTarget` 未覆盖。改为从 `CODEX_EVA_DEBUG_PORT` 读取端口并传给 `findCodexTarget`，新增断言该端口的测试。
 - **已修**：`companion/README.md` 开头声称「原图标启动即自动套皮肤」，与本节「已知阻碍」矛盾，已改写并补上带调试端口的启动步骤。
 - **已修**：`install.ps1` 中从未使用的 `-Install` 参数已删除。
-- **未处理（需决策）**：版本适配器目录 `src/adapters/` 未建立，事件方法名目前硬编码在 `client/adapter.js` 中；adapter 的额度刷新与页面可见性无关，也没有限流退避；托盘「设置」在未连接时无反应；`classifyThread` 对未知来源静默丢弃，未按设计报告兼容状态。这些属于功能范围，不是一句话能改完的，留待下一轮实现。
+- **已补**：`src/adapters/` 按「当前指纹 → 契约」识别版本（当前 `mcp-view-1`，指纹见上文）。指纹未验证时不接入并在托盘说明原因，`node src/diagnose.mjs` 输出 `versionAdapter.status`；页面 adapter 的方法名全部来自契约，不再硬编码。主循环从已安装客户端计算指纹后传入，`npm start` 走同一路径。
+- **已补**：额度刷新按可见性 5 分钟 / 隐藏暂停 / 恢复即刷，限流按服务端提示退避，并修掉了页面里 `crypto.randomUUID` 不可用时请求被吞、以及 `timer` 变量遮蔽导致退避失效两个隐患。
+- **未处理（需决策）**：托盘「设置」在未连接时无反应；`classifyThread` 对未知来源静默丢弃，未按设计报告兼容状态；`tests/client.test.mjs`、`fixtures/workbench.html` 等计划中的夹具文件名未采用（现有 `client.browser.mjs`、`adapter.browser.mjs` 覆盖了主要布局与额度行为）。

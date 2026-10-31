@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { connectCdp } from '../src/cdp.mjs';
+import { MCP_VIEW_V1 } from '../src/adapters/index.mjs';
 
 // Runs in a real browser so visibility, timers and postMessage are the real ones.
 // Requires EVA_BROWSER_ENDPOINT, same as client.browser.mjs.
@@ -48,6 +49,8 @@ test('quota adapter refreshes on visibility, honours throttling, and stops when 
     // Regression: a tab that is hidden at load must still fetch once it becomes
     // visible, instead of waiting a full five-minute interval.
     await evaluate("Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});");
+    // The page only knows the method names the version adapter hands it.
+    await evaluate(`window.__EVA_HOST__ = ${JSON.stringify(MCP_VIEW_V1)};`);
     const adapter = await readFile(new URL('../client/adapter.js', import.meta.url), 'utf8');
     await evaluate(adapter);
     await evaluate('new Promise(r=>setTimeout(r,30))');

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { discoverCodexAsar } from './discovery.mjs';
 import { openAsar } from './asar.mjs';
+import { selectAdapter } from './adapters/index.mjs';
 
 const MAX_PACKAGE_BYTES = 512 * 1024;
 const MAX_ENTRY_BYTES = 8 * 1024 * 1024;
@@ -96,6 +97,7 @@ async function diagnose() {
       localDebugging: 'not_configured',
     },
     electronFuses: await readFuseEvidence(discovered.executablePath),
+    versionAdapter: { status: 'unknown', id: null },
     conclusion: '未执行连接、注入、启动或关闭操作。',
   };
 
@@ -156,6 +158,20 @@ async function diagnose() {
   } finally {
     await archive.close();
   }
+
+  // Fingerprint decides whether event/quota adaptation may run at all.
+  let probeRecord = '';
+  try {
+    probeRecord = await readFile(new URL('../../docs/validation/entry-probe.md', import.meta.url), 'utf8');
+  } catch {
+    probeRecord = '';
+  }
+  const selection = selectAdapter({ fingerprint: report.fingerprint?.value, probeRecord });
+  report.versionAdapter = {
+    status: selection.status,
+    id: selection.adapter?.id ?? null,
+    reason: selection.reason ?? null,
+  };
 
   if (report.endpoint.localDebugging === 'no_startup_switch_detected') {
     report.conclusion = '静态确认 ASAR 入口；当前普通启动未检测到调试端口开关，尚未证明其他接入方式不可行。';

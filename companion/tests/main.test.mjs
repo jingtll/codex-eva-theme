@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { startCompanion } from '../src/main.mjs';
 
 function idle(ms = 5) {
@@ -20,6 +21,8 @@ async function waitFor(predicate, { timeoutMs = 500 } = {}) {
 
 const stopSounds = async () => 0;
 const FAKE_TARGET = { id: 'main', webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/page/main' };
+const VERIFIED_FINGERPRINT = '2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1';
+const PROBE_RECORD = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'validation', 'entry-probe.md');
 
 async function settingsFile(t) {
   const dir = await mkdtemp(join(tmpdir(), 'eva-main-'));
@@ -74,6 +77,8 @@ test('polls only while Codex is present and tears everything down on stop', asyn
     createNotifier: () => runtime.notifier,
     playCue: runtime.playCue,
     settingsPath: await settingsFile(t),
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 10,
     sendTray: (message) => messages.push(message),
     stopSounds,
@@ -102,6 +107,8 @@ test('pause closes the live connection, resume reconnects once, and stop is fina
     createNotifier: () => runtime.notifier,
     playCue: runtime.playCue,
     settingsPath: await settingsFile(t),
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 5,
     sendTray: () => {},
     stopSounds,
@@ -134,6 +141,8 @@ test('settings from the skin are validated, persisted, and handed to later sessi
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 5,
     sendTray: () => {},
     stopSounds,
@@ -161,6 +170,8 @@ test('settings from the skin are validated, persisted, and handed to later sessi
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 5,
     sendTray: () => {},
     stopSounds,
@@ -182,6 +193,8 @@ test('a broken settings file falls back to defaults instead of blocking startup'
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 5,
     sendTray: () => {},
     stopSounds,
@@ -201,6 +214,8 @@ test('tray messages are restricted to the fixed command set', async (t) => {
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: await settingsFile(t),
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 1000,
     sendTray: (message) => messages.push(message),
     onCommand: (action) => actions.push(action),
@@ -230,6 +245,8 @@ test('reconnects after a dropped connection without stacking sessions', async (t
     createNotifier: () => runtime.notifier,
     playCue: runtime.playCue,
     settingsPath: await settingsFile(t),
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 5,
     sendTray: () => {},
     stopSounds,
@@ -269,6 +286,8 @@ test('a second companion on the same settings reports rather than attaching twic
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 50,
     stopSounds,
   };
@@ -296,6 +315,8 @@ test('a stale lock left by a dead process is taken over', async (t) => {
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
     pollMs: 50,
     sendTray: () => {},
     stopSounds,
@@ -320,5 +341,47 @@ test('the default discovery is asked for the configured debugging port', async (
   });
   await waitFor(() => seen.length >= 1);
   assert.equal(seen[0], 19327);
+  await instance.stop();
+});
+
+test('an unverified client fingerprint is reported and never attached', async (t) => {
+  const messages = [];
+  let attaches = 0;
+  const instance = await startCompanion({
+    findTarget: async () => FAKE_TARGET,
+    fingerprint: 'a'.repeat(64),
+    probeRecordPath: PROBE_RECORD,
+    attach: async () => { attaches += 1; return { async tick() {}, async close() {} }; },
+    createNotifier: () => ({ accept: () => null }),
+    playCue: async () => ({ ok: true }),
+    settingsPath: await settingsFile(t),
+    pollMs: 5,
+    sendTray: (message) => messages.push(message),
+    stopSounds,
+  });
+  await waitFor(() => messages.some((m) => /未验证/.test(m.text || '')));
+  assert.equal(attaches, 0);
+  assert.ok(!messages.some((m) => m.text === '已连接'));
+  await instance.stop();
+});
+
+test('the verified fingerprint attaches with the adapter contract in the bundle', async (t) => {
+  let bundleHost = null;
+  const instance = await startCompanion({
+    findTarget: async () => FAKE_TARGET,
+    fingerprint: VERIFIED_FINGERPRINT,
+    probeRecordPath: PROBE_RECORD,
+    buildBundle: async (settings, host) => { bundleHost = host; return '/* bundle */'; },
+    attach: async () => ({ async tick() {}, async close() {} }),
+    createNotifier: () => ({ accept: () => null }),
+    playCue: async () => ({ ok: true }),
+    settingsPath: await settingsFile(t),
+    pollMs: 5,
+    sendTray: () => {},
+    stopSounds,
+  });
+  await waitFor(() => bundleHost !== null);
+  assert.equal(bundleHost.id, 'mcp-view-1');
+  assert.equal(bundleHost.methods.turnCompleted, 'turn/completed');
   await instance.stop();
 });
