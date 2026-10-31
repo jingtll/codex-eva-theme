@@ -86,6 +86,17 @@ test('quota adapter refreshes on visibility, honours throttling, and stops when 
     await evaluate('new Promise(r=>setTimeout(r,150))');
     assert.equal(await evaluate('window.__calls.length'), 1, 'no retry before the server hint elapses');
 
+    await evaluate(`
+      window.dispatchEvent(new MessageEvent('message',{data:{type:'mcp-notification',method:'account/rateLimits/rateLimited',params:{retryAfterSeconds:120}}}));
+      Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});
+      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'visible'});
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.__evaQuota.refresh();
+      new Promise(r=>setTimeout(r,30));
+    `);
+    assert.equal(await evaluate('window.__calls.length'), 1, 'visibility and manual refresh must not bypass server backoff');
+
     // Dispose leaves nothing callable and drops late replies.
     await evaluate('window.__evaAdapter.dispose()');
     assert.equal(await evaluate("typeof window.__evaQuota + '/' + typeof window.__evaAdapter"), 'undefined/undefined');

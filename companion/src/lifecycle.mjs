@@ -12,7 +12,7 @@ export function createLifecycle({findTarget,attach,onStatus=()=>{}}) {
         if(!target){await disconnect();onStatus('等待 Codex 调试入口');return;}
         if(current?.id!==target.id){await disconnect();const session=await attach(target);if(stopped||paused){await session.close();return;}current={id:target.id,session};onStatus('已连接');}
         await current.session.tick?.();
-      }catch{await disconnect();onStatus('连接不可用，稍后重试');}
+      }catch(error){await disconnect();onStatus(error?.code==='ADAPTER_UNSUPPORTED'?error.message:'连接不可用，稍后重试');}
     })();
     try{await working;}finally{working=null;}
   }

@@ -81,13 +81,18 @@
     const hostId = data.hostId || 'local';
     if (method === methods.accountChanged || method === methods.loginCompleted) {
       // A different account invalidates any in-flight answer for the old one.
-      epoch++; emit({ type: 'account-changed' }); schedule(0); return;
+      epoch++; failures = 0; retryAt = 0; hintRetrySeconds = 0;
+      emit({ type: 'account-changed' }); schedule(0); return;
     }
     if (method === methods.quotaPush) { epoch++; emit({ type: 'quota', payload: params }); return; }
     // The host may tell us how long to wait after throttling a request.
     if (method === methods.rateLimited) {
       const seconds = Number(params.retryAfterSeconds ?? params.retry_after_seconds ?? params.retryAfter);
-      if (Number.isFinite(seconds) && seconds > 0) hintRetrySeconds = seconds;
+      if (Number.isFinite(seconds) && seconds > 0) {
+        hintRetrySeconds = seconds;
+        retryAt = Math.max(retryAt, Date.now() + seconds * 1000);
+        schedule(seconds * 1000);
+      }
       return;
     }
     if (method === methods.threadStarted) {
@@ -109,7 +114,6 @@
    * `retryAfterSeconds` wins (server throttling), otherwise a capped backoff.
    * An answer belonging to an account that has since changed is dropped.
    */
-  let requestedWhileHidden = false;
   // Not async on purpose: as an async function, any synchronous throw would
   // surface as a silently ignored rejected promise instead of reaching the caller.
   function refresh() {
@@ -119,12 +123,14 @@
   async function runRefresh() {
     if (stopped || inFlight) return;
     if (document.visibilityState === 'hidden') { skippedWhileHidden = true; return; }
+    if (Date.now() < retryAt) { schedule(retryAt - Date.now()); return; }
     inFlight = true;
     const generation = epoch;
     try {
       const payload = await request(methods.quotaRead, null);
       if (generation === epoch) { failures = 0; retryAt = 0; emit({ type: 'quota', payload }); }
     } catch (error) {
+      if (generation !== epoch) return;
       const hinted = Number.isFinite(hintRetrySeconds) && hintRetrySeconds > 0 ? hintRetrySeconds * 1000 : 0;
       hintRetrySeconds = 0;
       const backoff = hinted || BACKOFF_MS[Math.min(failures, BACKOFF_MS.length - 1)];
@@ -133,7 +139,7 @@
       if (generation === epoch) emit({ type: 'quota-error', code: error?.message || 'QUOTA_FAILED', retryInMs: backoff });
     } finally {
       inFlight = false;
-      schedule(VISIBLE_INTERVAL_MS);
+      schedule(generation !== epoch ? 0 : failures ? Math.max(0, retryAt - Date.now()) : VISIBLE_INTERVAL_MS);
     }
   }
 

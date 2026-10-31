@@ -221,7 +221,7 @@ export async function startCompanion(options = {}) {
       const hostAdapter = await resolveHostAdapter();
       if (hostAdapter.status !== 'verified') {
         publish({ type: 'status', text: hostAdapter.reason });
-        throw Error('ADAPTER_UNSUPPORTED');
+        throw Object.assign(Error(hostAdapter.reason), {code:'ADAPTER_UNSUPPORTED'});
       }
       const media = makeMedia();
       let session;

@@ -359,9 +359,11 @@ test('an unverified client fingerprint is reported and never attached', async (t
     sendTray: (message) => messages.push(message),
     stopSounds,
   });
+  t.after(() => instance.stop());
   await waitFor(() => messages.some((m) => /未验证/.test(m.text || '')));
   assert.equal(attaches, 0);
   assert.ok(!messages.some((m) => m.text === '已连接'));
+  assert.match(messages.at(-1).text, /未验证/);
   await instance.stop();
 });
 
