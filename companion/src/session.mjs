@@ -35,7 +35,7 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
   async function command(value){
     if(value.action==='pilot'){if(['rei','asuka'].includes(value.pilot))pilot=value.pilot;}
     else if(value.action==='refresh')await evaluate('window.__evaQuota?.refresh()');
-    else if(value.action==='settings'){await setSettings(value.settings);await evaluate(`window.__codexEva?.setSettings(${JSON.stringify(getSettings())})`);if(getSettings().music===false){mediaGeneration++;media.close();}}
+    else if(value.action==='settings'){await setSettings(value.settings);await evaluate(`window.__codexEva?.setSettings(${JSON.stringify(getSettings())})`);if(getSettings().music===false){mediaGeneration++;media.suspend?.();await update({media:null});}}
     else if(value.action==='cue'&&['approval','completed'].includes(value.kind))await cue(value.kind,pilot,true);
     else if(value.action==='media'&&['playpause','next','previous'].includes(value.command)){
       mediaGeneration++;await media.control(value.command,value.sourceId);await sampleMedia();
@@ -46,7 +46,10 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
     else if(value.type==='account-changed'){quota=null;await update({quota:null,stale:false,status:'账户已变化'});}
     else if(value.type==='quota-error')await update({stale:!!quota,status:'额度暂不可用'});
     else if(value.type==='thread-source'&&typeof value.threadId==='string'&&typeof value.hostId==='string'){
-      const classification=classifyThread(value.source);if(classification!==null){sources.set(`${value.hostId}/${value.threadId}`,classification);if(sources.size>2000)sources.delete(sources.keys().next().value);}
+      const key=`${value.hostId}/${value.threadId}`;
+      const classification=classifyThread(value.source);
+      if(classification!==null){sources.set(key,classification);if(sources.size>2000)sources.delete(sources.keys().next().value);}
+      else {sources.delete(key);onStatus('兼容受限：未知聊天来源，未启用该聊天的声音提醒');}
     }else if(value.type==='notification'){
       const event=mapNotification(value,sources);const reminder=event&&notifier.accept(event);if(reminder)await cue(reminder.kind);
     }
@@ -71,7 +74,7 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
     await evaluate(bundle);
   }catch(error){offContext();offDestroyed();offBinding();cdp.close();throw error;}
   return {
-    syncSettings(patch){return evaluate(`window.__evaInstall?.(${JSON.stringify(patch)})`);},
+    syncSettings(patch){return evaluate(`window.__codexEva?.setSettings(${JSON.stringify(patch)})`);},
     // Re-injects the bundle if the page lost it (e.g. the composer was not yet
     // present when the new document loaded). Cheap when the skin is mounted.
     async ensureMounted(){if(disposed)return;await evaluate('(()=>{if(!window.__codexEva&&window.__evaInstall)window.__evaInstall()})()');},
@@ -80,8 +83,12 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
     openSettings:()=>evaluate('window.__codexEva?.openSettings()'),
     async close(){
       if(disposed)return;mediaGeneration++;media.close();
-      await evaluate('window.__evaInstaller?.disconnect();delete window.__evaInstaller;window.__evaAdapter?.dispose();window.__codexEva?.dispose();delete window.__EVA_ASSETS__;delete window.__EVA_CSS__;delete window.__EVA_SETTINGS__').catch(()=>{});
+      await evaluate('window.__evaInstaller?.disconnect();delete window.__evaInstaller;window.__evaAdapter?.dispose();window.__codexEva?.dispose();delete window.__evaInstall;delete window.__EVA_HOST__;delete window.__EVA_ASSETS__;delete window.__EVA_CSS__;delete window.__EVA_SETTINGS__').catch(()=>{});
       if(scriptId)await cdp.send('Page.removeScriptToEvaluateOnNewDocument',{identifier:scriptId}).catch(()=>{});
+      for(const name of ['__evaCommand','__evaHostEvent']){
+        await cdp.send('Runtime.removeBinding',{name}).catch(()=>{});
+        await evaluate(`delete window.${name}`).catch(()=>{});
+      }
       disposed=true;offBinding();offContext();offDestroyed();cdp.close();
     },
   };

@@ -109,4 +109,18 @@ test('the session leaves no binding or script behind on close', async () => {
   assert.equal(cdp.connected, false);
   const removed = cdp.calls.find((call) => call.method === 'Page.removeScriptToEvaluateOnNewDocument');
   assert.deepEqual(removed.params, { identifier: 'script-1' });
+  assert.deepEqual(cdp.calls.filter(call=>call.method==='Runtime.removeBinding').map(call=>call.params.name), ['__evaCommand','__evaHostEvent']);
+});
+
+test('unknown thread sources report limited compatibility and do not play a cue', async () => {
+  const cdp=fakeCdp(), statuses=[], cues=[];
+  const session=await attach(cdp,{onStatus:text=>statuses.push(text),playCue:async cue=>cues.push(cue)});
+  cdp.emit('Runtime.executionContextCreated', contextCreated(1));
+  const emit=value=>cdp.emit('Runtime.bindingCalled',{name:'__evaHostEvent',executionContextId:1,payload:JSON.stringify(value)});
+  emit({type:'thread-source',hostId:'local',threadId:'a',source:'future-client'});
+  emit({type:'notification',hostId:'local',method:'turn/completed',params:{threadId:'a',turn:{id:'1',status:'completed'}}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(statuses.some(text=>text.includes('未知聊天来源')));
+  assert.equal(cues.length,0);
+  await session.close();
 });

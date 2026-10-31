@@ -9,6 +9,7 @@ import { attachSession } from './session.mjs';
 import { createMediaBridge } from './media.mjs';
 import { playCue, stopSounds } from './sound.mjs';
 import { selectAdapter } from './adapters/index.mjs';
+import { resourceFingerprint } from './diagnose-fingerprint.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const TRAY_SCRIPT = join(ROOT, 'windows', 'tray.ps1');
@@ -67,7 +68,7 @@ async function writeJsonFile(path, value) {
  * parsed by the caller against the fixed action set.
  */
 function openTrayChannel({ runScript, onAction }) {
-  const child = runScript(process.execPath, [
+  const child = runScript('powershell.exe', [
     '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-STA',
     '-File', TRAY_SCRIPT,
   ], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
@@ -153,6 +154,8 @@ export async function startCompanion(options = {}) {
     // Resource fingerprint of the running client and the probe record that
     // lists which adapter it was verified against.
     fingerprint = null,
+    discover = discoverCodexAsar,
+    fingerprintOf = resourceFingerprint,
     probeRecordPath = join(ROOT, '..', 'docs', 'validation', 'entry-probe.md'),
     now = () => Date.now(),
   } = options;
@@ -189,7 +192,7 @@ export async function startCompanion(options = {}) {
   let generation = 0;
 
   const notifier = makeNotifier();
-  const media = makeMedia();
+  let installation = null;
 
   const publish = (message) => send(message);
 
@@ -203,7 +206,12 @@ export async function startCompanion(options = {}) {
 
   const lifecycle = createLifecycle({
     findTarget: async () => {
-      const result = debugPort ? await findTarget({ port: debugPort }) : await findTarget();
+      let port = debugPort;
+      if (!port && !fingerprint) {
+        installation = await discover();
+        port = installation.remoteDebuggingPort;
+      }
+      const result = port ? await findTarget({ port }) : await findTarget();
       // discovery returns a status record; tests may inject a bare target.
       if (result && typeof result.webSocketDebuggerUrl === 'string' && result.status !== 'endpoint_unavailable') return result;
       return null;
@@ -214,8 +222,9 @@ export async function startCompanion(options = {}) {
         publish({ type: 'status', text: hostAdapter.reason });
         throw Error('ADAPTER_UNSUPPORTED');
       }
-      const session = await attachImpl({
-        target,
+      const media = makeMedia();
+      let session;
+      try { session = await attachImpl(target, {
         bundle: await buildBundleImpl(settings, hostAdapter.adapter),
         media,
         notifier,
@@ -223,7 +232,7 @@ export async function startCompanion(options = {}) {
         setSettings: (patch) => persist(patch),
         playCue: playCueImpl,
         onStatus: (text) => publish({ type: 'status', text }),
-      });
+      }); } catch (error) { media.close(); throw error; }
       sessionRef = session;
       return {
         tick: () => session.tick?.(),
@@ -231,6 +240,7 @@ export async function startCompanion(options = {}) {
         syncSettings: (patch) => session.syncSettings?.(patch),
         async close() {
           try { await session.close?.(); } finally {
+            media.close();
             if (sessionRef === session) sessionRef = null;
           }
         },
@@ -240,9 +250,14 @@ export async function startCompanion(options = {}) {
   });
 
   async function resolveHostAdapter() {
+    let currentFingerprint = fingerprint;
+    if (!currentFingerprint) {
+      installation = await discover();
+      if (installation.status === 'found') currentFingerprint = await fingerprintOf(installation.asarPath);
+    }
     let probeRecord = '';
     try { probeRecord = await readFile(probeRecordPath, 'utf8'); } catch { probeRecord = ''; }
-    return selectAdapter({ fingerprint, probeRecord });
+    return selectAdapter({ fingerprint: currentFingerprint, probeRecord });
   }
 
   async function cycle() {
@@ -285,7 +300,8 @@ export async function startCompanion(options = {}) {
         if (generation === started) schedule();
       }
     } else if (action === 'open-settings') {
-      await sessionRef?.openSettings?.().catch(() => {});
+      if (sessionRef) await sessionRef.openSettings?.().catch(() => {});
+      else publish({ type: 'status', text: '设置需要连接 Codex；请先启动已配置调试入口的客户端' });
     } else if (action === 'quit') {
       await instance.stop();
     }
@@ -300,7 +316,6 @@ export async function startCompanion(options = {}) {
       timer = null;
       sessionRef = null;
       await lifecycle.stop();
-      media.close();
       await stopSoundsImpl();
       trayChannel?.end();
       trayChannel = null;
@@ -319,7 +334,11 @@ export async function startCompanion(options = {}) {
       }
       // Track the first cycle separately so a failed start (e.g. an unsupported
       // client version) still returns a stoppable instance, and say why.
-      await Promise.race([cycle(), new Promise((resolve) => setTimeout(resolve, 5000))]).catch(() => {});
+      let deadline;
+      try {
+        await Promise.race([cycle(), new Promise(resolve => { deadline = setTimeout(resolve, 5000); })]);
+      } catch { /* The next cycle retries. */ }
+      finally { clearTimeout(deadline); }
       schedule();
       return instance;
     },
@@ -340,26 +359,11 @@ export async function startCompanion(options = {}) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === (await import('node:path')).resolve(process.argv[1])) {
   const { spawn } = await import('node:child_process');
-  // Only one companion should ever own a page. Concurrent starts serialize on a
-  // second copy of the settings file, so the second instance reports that
-  // another companion is running instead of attaching twice.
-  // Discover the installed client once so the adapter can be matched to its
-  // resource fingerprint; without one the companion refuses to attach.
-  let fingerprint = null;
-  try {
-    const discovered = await discoverCodexAsar();
-    if (discovered.status === 'found') {
-      const probe = await import('./diagnose-fingerprint.mjs');
-      fingerprint = await probe.resourceFingerprint(discovered.asarPath);
-    }
-  } catch {
-    fingerprint = null;
-  }
   const instance = await startCompanion({
-    fingerprint,
     runScript: (command, args, opts) => spawn(command, args, { ...opts, cwd: ROOT }),
   });
-  instance.publish({ type: 'status', text: fingerprint ? '伴随程序正在等待 Codex' : '未识别 Codex 版本，已停用接入' });
+  if (instance.stopped) process.exit(0);
+  const keepAlive = setInterval(() => { if (instance.state === 'stopped') { clearInterval(keepAlive); process.exit(0); } }, 250);
   const shutdown = () => { instance.stop().finally(() => process.exit(0)); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);

@@ -73,35 +73,40 @@ $Timer = New-Object System.Windows.Forms.Timer
 $Timer.Interval = 120
 
 $script:Quit = $false
-$script:Pending = ''
+# Console.In.Peek blocks the UI thread when stdin has no data. Read only in a
+# dedicated CLR thread; the WinForms timer drains a thread-safe queue.
+Add-Type -TypeDefinition @"
+using System;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
+public static class EvaTrayInput {
+  public static readonly ConcurrentQueue<string> Lines = new ConcurrentQueue<string>();
+  public static volatile bool Closed;
+  public static void Start() {
+    Task.Factory.StartNew(() => {
+      try { string line; while ((line = Console.ReadLine()) != null) Lines.Enqueue(line); }
+      finally { Closed = true; }
+    }, TaskCreationOptions.LongRunning);
+  }
+}
+"@
+[EvaTrayInput]::Start()
 
 $Timer.add_Tick({
-  $Reader = [Console]::In
-  # Drain whatever is already buffered without blocking the UI thread.
-  while ($Reader.Peek() -ge 0) {
-    $Chunk = [char]$Reader.Read()
-    if ($Chunk -eq "`n") {
-      $Line = $script:Pending.Trim()
-      $script:Pending = ''
-      if ($Line -ne '') {
-        try {
-          $Message = $Line | ConvertFrom-Json
-          if ($null -ne $Message.text) {
-            $script:Status = [string]$Message.text
-            $StatusItem.Text = "状态：$($script:Status)"
-            $Suffix = if ($script:Paused) { ' · 已暂停' } else { '' }
-            $Icon.Text = "Codex EVA 伴随程序：$($script:Status)$Suffix"
-          }
-        } catch { }
+  $Line = $null
+  while ([EvaTrayInput]::Lines.TryDequeue([ref]$Line)) {
+    try {
+      $Message = $Line | ConvertFrom-Json
+      if ($null -ne $Message.text) {
+        $script:Status = [string]$Message.text
+        $StatusItem.Text = "状态：$($script:Status)"
+        $Suffix = if ($script:Paused) { ' · 已暂停' } else { '' }
+        $Tooltip = "Codex EVA 伴随程序：$($script:Status)$Suffix"
+        $Icon.Text = $Tooltip.Substring(0, [Math]::Min(63, $Tooltip.Length))
       }
-    } else {
-      $script:Pending += $Chunk
-    }
+    } catch { }
   }
-  if ($null -eq $Reader.Peek()) {
-    # stdin closed: the Node companion is gone, so this tray has nothing to drive.
-    $script:Quit = $true
-  }
+  if ([EvaTrayInput]::Closed) { $script:Quit = $true }
   if ($script:Quit) {
     $Timer.Stop()
     $Icon.Visible = $false

@@ -132,3 +132,20 @@ test('PowerShell bridge returns a negative no-media state and maps play and paus
   assert.match(source, /pause\s+=\s+'TryPauseAsync'/);
   assert.match(source, /ok\s*=\s*\$false;\s*code\s*=\s*'NO_MEDIA'.*playing\s*=\s*\$false;\s*state\s*=\s*''/);
 });
+
+test('temporarily disabling music releases the process and can resume reading later', async () => {
+  const {calls,spawn}=harness();
+  const bridge=createMediaBridge({spawn});
+  const first=bridge.read();
+  await nextTurn();
+  calls[0].child.respond({ok:true,title:'first'});
+  await first;
+  bridge.suspend();
+  assert.equal(calls[0].child.killed,true);
+  const resumed=bridge.read();
+  await nextTurn();
+  assert.equal(calls.length,2);
+  calls[1].child.respond({ok:true,title:'resumed'});
+  assert.equal((await resumed).title,'resumed');
+  bridge.close();
+});

@@ -134,7 +134,7 @@ test('settings from the skin are validated, persisted, and handed to later sessi
   const received = [];
   const instance = await startCompanion({
     findTarget: async () => FAKE_TARGET,
-    attach: async ({ getSettings, setSettings }) => {
+    attach: async (target, { getSettings, setSettings }) => {
       received.push({ getSettings, setSettings });
       return { async tick() {}, async close() {} };
     },
@@ -166,7 +166,7 @@ test('settings from the skin are validated, persisted, and handed to later sessi
   const second = [];
   const again = await startCompanion({
     findTarget: async () => FAKE_TARGET,
-    attach: async ({ getSettings }) => { second.push(getSettings()); return { async tick() {}, async close() {} }; },
+    attach: async (target, { getSettings }) => { second.push(getSettings()); return { async tick() {}, async close() {} }; },
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
@@ -189,7 +189,7 @@ test('a broken settings file falls back to defaults instead of blocking startup'
   let settings = null;
   const instance = await startCompanion({
     findTarget: async () => FAKE_TARGET,
-    attach: async ({ getSettings }) => { settings = getSettings(); return { async tick() {}, async close() {} }; },
+    attach: async (target, { getSettings }) => { settings = getSettings(); return { async tick() {}, async close() {} }; },
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
     settingsPath: file,
@@ -384,4 +384,57 @@ test('the verified fingerprint attaches with the adapter contract in the bundle'
   assert.equal(bundleHost.id, 'mcp-view-1');
   assert.equal(bundleHost.methods.turnCompleted, 'turn/completed');
   await instance.stop();
+});
+
+test('tray launches Windows PowerShell and disconnected settings explain what to do', async (t) => {
+  const calls = [], messages = [];
+  const instance = await startCompanion({
+    settingsPath: await settingsFile(t), findTarget: async () => null,
+    runScript: (command, args, options) => {
+      calls.push({command, args, options});
+      return {stdin: {write() {}, end() {}}, kill() {}};
+    },
+    sendTray: message => messages.push(message), pollMs: 60000, stopSounds,
+  });
+  t.after(() => instance.stop());
+  assert.equal(calls[0].command, 'powershell.exe');
+  assert.ok(calls[0].args.includes('-STA'));
+  assert.equal(calls[0].options.windowsHide, true);
+  await instance.handleTray('open-settings');
+  assert.ok(messages.some(message => /设置.*连接|连接.*设置/.test(message.text || '')));
+});
+
+test('companion started before Codex discovers its port and fingerprint after Codex opens', async t => {
+  let running = false, attached = 0;
+  const ports = [];
+  const instance = await startCompanion({
+    settingsPath: await settingsFile(t), pollMs: 10, stopSounds,
+    discover: async () => running ? {status:'found', asarPath:'fixture.asar', remoteDebuggingPort:19327} : {status:'process_not_found'},
+    fingerprintOf: async path => { assert.equal(path, 'fixture.asar'); return VERIFIED_FINGERPRINT; },
+    findTarget: async ({port} = {}) => { ports.push(port); return port === 19327 ? FAKE_TARGET : null; },
+    attach: async () => { attached++; return {close:async()=>{}}; },
+    sendTray: () => {},
+  });
+  t.after(() => instance.stop());
+  assert.equal(attached, 0);
+  running = true;
+  await waitFor(() => attached === 1);
+  assert.ok(ports.includes(19327));
+});
+
+test('each resumed connection receives a fresh media bridge', async t => {
+  const bridges=[];
+  const instance = await startCompanion({
+    settingsPath:await settingsFile(t), pollMs:60000, stopSounds,
+    fingerprint:VERIFIED_FINGERPRINT, findTarget:async()=>FAKE_TARGET,
+    createMediaBridge:()=>{const bridge={closed:false,close(){this.closed=true}};bridges.push(bridge);return bridge;},
+    attach:async(target,{media})=>{assert.equal(media.closed,false);return {close:async()=>media.close()};},
+    sendTray:()=>{},
+  });
+  t.after(()=>instance.stop());
+  await instance.pause();
+  assert.equal(bridges[0].closed,true);
+  await instance.resume();
+  assert.equal(bridges.length,2);
+  assert.equal(bridges[1].closed,false);
 });

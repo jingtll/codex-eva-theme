@@ -123,6 +123,7 @@ export function createMediaBridge({
   return {
     read: () => request('read'),
     control,
+    suspend() { drop(child, 'SUSPENDED'); },
     close() {
       if (closed) return;
       closed = true;
