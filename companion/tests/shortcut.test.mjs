@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,readFile,rm,writeFile} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,rm,writeFile,rename} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -51,4 +51,22 @@ test('launcher resolves the installed package each time, uses loopback, and refu
   assert.equal(calls[1].file,join(root,'app','ChatGPT.exe'));
   assert.deepEqual(calls[1].arguments,['--remote-debugging-port=19327','--remote-debugging-address=127.0.0.1']);
   await assert.rejects(run('1'),error=>error.stdout.includes('CODEX_RESTART_REQUIRED')&&!error.stdout.includes('SPAWN:'));
+});
+
+test('an interrupted prepared shortcut is resumed without leaving the staged link behind', {skip:process.platform!=='win32'},async t=>{
+  const root=await mkdtemp(join(tmpdir(),'eva-shortcut-resume-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const desktop=join(root,'Desktop'),appdata=join(root,'AppData');
+  const run=()=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-ShortcutDirectory',desktop],{env:{...process.env,APPDATA:appdata},encoding:'utf8'});
+  await run();
+  const data=join(appdata,'CodexEva'),receiptPath=join(data,'shortcut-receipt.json'),link=join(desktop,'Codex EVA.lnk');
+  const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
+  receipt.phase='prepared';receipt.temporaryName='shortcut-build-0123456789abcdef0123456789abcdef.lnk';
+  const staged=join(data,receipt.temporaryName);
+  await rename(link,staged);
+  await writeFile(receiptPath,JSON.stringify(receipt));
+  await run();
+  assert.ok((await readFile(link)).length>0);
+  await assert.rejects(readFile(staged),/ENOENT/);
+  assert.equal(JSON.parse(await readFile(receiptPath,'utf8')).phase,'committed');
 });

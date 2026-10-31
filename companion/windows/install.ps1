@@ -152,14 +152,26 @@ $Receipt = [ordered]@{
 }
 # The prepared receipt preserves both sides of an interrupted registry update.
 Write-ReceiptAtomically $Receipt
-$HadShortcutReceipt = Test-Path -LiteralPath (Join-Path $DataDir 'shortcut-receipt.json') -PathType Leaf
+$ShortcutReceiptPath = Join-Path $DataDir 'shortcut-receipt.json'
+$ShortcutIconPath = Join-Path $DataDir 'shortcut-codex.ico'
+$PriorShortcutReceipt = $null
+$PriorShortcutIcon = $null
+if ($CreateShortcut) {
+  if (Test-Path -LiteralPath $ShortcutReceiptPath -PathType Leaf) { $PriorShortcutReceipt = [IO.File]::ReadAllBytes($ShortcutReceiptPath) }
+  if (Test-Path -LiteralPath $ShortcutIconPath -PathType Leaf) { $PriorShortcutIcon = [IO.File]::ReadAllBytes($ShortcutIconPath) }
+}
+$CreatedShortcut = $false
 try {
   if ($CurrentValue -eq $Command) { Write-Output 'REG-OK: already up to date' }
   else {
     Set-ItemProperty -Path $RunKey -Name $RunName -Value $Command -ErrorAction Stop
     Write-Output "REG-OK: command = $Command"
   }
-  if ($CreateShortcut) { & (Join-Path $PSScriptRoot 'shortcut.ps1') }
+  if ($CreateShortcut) {
+    $ShortcutResult = @(& (Join-Path $PSScriptRoot 'shortcut.ps1'))
+    $CreatedShortcut = $ShortcutResult -contains 'SHORTCUT-OK: created'
+    $ShortcutResult | Write-Output
+  }
   $Receipt.phase = 'committed'
   Write-ReceiptAtomically $Receipt
 } catch {
@@ -171,7 +183,11 @@ try {
   }
   if ($null -ne $Existing) { Write-ReceiptAtomically $Existing }
   else { Remove-Item -LiteralPath $ReceiptPath -Force }
-  if ($CreateShortcut -and -not $HadShortcutReceipt) { & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove }
+  if ($CreatedShortcut) {
+    & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove
+    if ($null -ne $PriorShortcutReceipt) { [IO.File]::WriteAllBytes($ShortcutReceiptPath, $PriorShortcutReceipt) }
+    if ($null -ne $PriorShortcutIcon -and -not (Test-Path -LiteralPath $ShortcutIconPath)) { [IO.File]::WriteAllBytes($ShortcutIconPath, $PriorShortcutIcon) }
+  }
   throw
 }
 Write-Output "安装收据：$ReceiptPath"
