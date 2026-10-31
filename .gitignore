@@ -38,3 +38,6 @@ coverage/
 
 # Local agent workspace data
 .workbuddy-ai/
+
+# Local plugin sandbox (not part of this repo)
+dsh-plugin-eva-theme/
