@@ -1,4 +1,4 @@
-﻿# Codex EVA 伴随程序
+# Codex EVA 伴随程序
 
 给 Codex 工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
 
@@ -22,7 +22,7 @@
 
 实际路径以 `node src/diagnose.mjs` 输出的发现结果为准。若想从快捷方式启动，请**先备份原快捷方式**再修改其“目标”字段。
 
-然后让伴随程序连这个端口：
+伴随程序会从运行中的客户端发现调试端口；也支持显式指定：
 
 ```powershell
 $env:CODEX_EVA_DEBUG_PORT="19327"; npm start
@@ -55,7 +55,7 @@ npm start
 powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\install.ps1
 ```
 
-安装会做三件事：检查 `src/main.mjs` 与 Node 22+；在当前用户 `Run` 键写入启动项；在 `%APPDATA%\CodexEva\install-receipt.json` 留一份收据（含启动项原值与命令）。重复执行是幂等的。
+安装检查 `src/main.mjs` 与 Node 22+，先保存安装收据，再在当前用户 `Run` 键注册隐藏启动脚本。收据含启动项原值与命令。重复安装会核对实际启动项；用户已改过时拒绝覆盖。伴随程序可以先于 Codex 启动，随后发现端口并检查资源指纹。
 
 ## 卸载 / 恢复
 
@@ -63,7 +63,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\install.ps
 powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\uninstall.ps1
 ```
 
-只删与收据一致的内容：启动项值仍是本程序写入的才删除，被用户改过就保留用户的值；同时删除 `settings.json` 与收据。Codex 的会话、凭据和项目文件不受影响。
+卸载先通知伴随程序干净退出（暂停时同样有效），再删除 `settings.json` 与收据。启动项仍与收据一致时恢复安装前的值，原来没有值则删除；用户后改的值保留。Codex 的会话、凭据和项目文件不受影响。
+
+安装收据区分 `prepared` 与 `committed`，保留本次修改前的值和首次安装前的原值。若升级中断，可重新安装继续，或直接卸载恢复；实际启动项与收据两侧都不匹配时报告 `REGISTRY_CONFLICT`，保留用户修改。
 
 若曾用补丁方式修改过 Codex 文件，用 `restorePatch(receipt)` 恢复：仅当目标文件仍等于补丁后哈希时才写回，客户端升级后会被 `PATCH_RESTORE_CONFLICT` 拒绝，不会覆盖新版本。
 
@@ -77,12 +79,14 @@ npm test                     # 契约测试（含 PowerShell 脚本解析、安�
 
 ```powershell
 # 另开一个终端
-& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --remote-debugging-port=19433 --user-data-dir=%TEMP%\eva-browser about:blank
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --remote-debugging-port=19433 --user-data-dir="$env:TEMP\eva-browser" about:blank
 # 然后
-$env:EVA_BROWSER_ENDPOINT="http://127.0.0.1:19433"; npm test
+$env:EVA_BROWSER_ENDPOINT="http://127.0.0.1:19433"; npm run test:browser
 ```
 
-静态测试、隔离浏览器测试与真实客户端验收是三类结果，不能互相替代。真实验收记录见 `docs/validation/acceptance.md`。
+端点就绪后运行 `npm run test:browser`，包含主题布局、额度 adapter，以及使用真实主循环/会话/bundle 的连接、刷新、暂停恢复与清理回归。`npm test` 不包含浏览器测试。
+
+静态测试、隔离浏览器测试与真实客户端验收是三类结果，不能互相替代。真实验收记录见 `docs/validation/acceptance.md`。原 MSIX 图标自动接入尚未实现，当前没有创建替代快捷方式。
 
 ## 结构
 
