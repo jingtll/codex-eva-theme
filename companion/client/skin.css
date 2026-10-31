@@ -5,3 +5,27 @@
 @media(max-width:1100px){.rail{right:12px;top:70px;width:190px}.clock time{font-size:30px}.portrait{left:180px;width:25vw}.geometry{left:190px;width:240px;height:240px}.unit{font-size:120px}.settings{right:220px}}
 @media(max-width:760px){.rail{top:55px;width:160px;opacity:.94}.pilot small,.pilot [data-status],.clock-meta{display:none}.pilot strong{font-size:13px}.clock time{font-size:25px}.caption{font-size:10px}.caption span{display:none}.portrait{left:10px;bottom:180px;width:40vw}.geometry{left:15px;bottom:160px;width:180px;height:180px}.unit{font-size:90px}.card{padding:8px}.settings{top:auto;bottom:100px;left:12px;right:12px;width:auto;max-height:60vh}.quota-row>strong{font-size:19px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.scanlines{display:none}}
+
+/* Geometry follows the visible workbench, never the full application window. */
+:host{container-type:size;container-name:eva-workbench;overflow:hidden}
+:host([data-surface=missing]){display:none!important}
+.portrait{left:16px;bottom:16px;width:min(28%,300px);height:min(50%,400px)}
+.geometry{left:16px;bottom:16px;width:min(28%,280px);height:auto;aspect-ratio:1}
+.unit{font-size:clamp(48px,12cqw,140px)}
+.unit-label{font-size:clamp(6px,.7cqw,10px);letter-spacing:1px;max-width:calc(100% - 24px);overflow:hidden;white-space:nowrap}
+:host([data-pilot=rei]) .unit{right:10%;bottom:10%}
+.rail{right:16px;top:48px;width:min(235px,calc(100% - 32px));max-height:calc(100% - 60px);overflow:auto;scrollbar-width:thin}
+.settings{top:48px;bottom:auto;left:auto;right:270px;width:260px;max-width:calc(100% - 24px);max-height:min(420px,calc(100% - 64px))}
+@container eva-workbench (max-width:1100px){
+  .rail{right:12px;width:min(190px,calc(100% - 24px))}
+  .clock time{font-size:30px}
+  .settings{right:220px}
+}
+@container eva-workbench (max-width:760px){
+  .rail{width:min(160px,calc(100% - 24px))}
+  .portrait{left:12px;bottom:12px;width:min(34%,180px);height:38%}
+  .geometry{left:12px;bottom:12px;width:min(32%,160px)}
+  .pilot small,.pilot [data-status],.clock-meta,.caption span{display:none}
+  .pilot strong{font-size:13px}.clock time{font-size:25px}.caption{font-size:10px}.card{padding:8px}
+  .settings{left:12px;right:12px;width:auto}
+}

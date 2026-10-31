@@ -5,7 +5,7 @@
   let settings = {...defaults, ...window.__EVA_SETTINGS__};
   let state = {quota:null, media:null, status:'已连接', stale:false};
   const assets = window.__EVA_ASSETS__ || {};
-  const root = document.createElement('div'); root.id = 'codex-eva-root';
+  const root = document.createElement('div'); root.id = 'codex-eva-root'; root.dataset.surface='missing';
   const shadow = root.attachShadow({mode:'open'});
   const style = document.createElement('style'); style.textContent = window.__EVA_CSS__ || '';
   shadow.append(style);
@@ -94,6 +94,34 @@
     root.hidden=!!document.querySelector('dialog[open], [aria-modal="true"][role="dialog"]');
     root.style.pointerEvents=root.hidden?'none':'';
   }
+  let layoutFrame=0,layoutTargets=[];
+  const layoutResize=new ResizeObserver(queueLayout);
+  function queueLayout(){if(!disposed&&!layoutFrame)layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;layout();});}
+  function layout(){
+    if(disposed)return;
+    const visible=element=>{const b=element.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(element).visibility!=='hidden';};
+    const input=[...document.querySelectorAll('[contenteditable="true"],textarea[placeholder]')].find(visible);
+    const surface=input?.closest('main,[role="main"]')||[...document.querySelectorAll('main,[role="main"]')].filter(visible).sort((a,b)=>a.getBoundingClientRect().width*a.getBoundingClientRect().height-b.getBoundingClientRect().width*b.getBoundingClientRect().height)[0];
+    root.dataset.surface=surface||input?'ready':'missing';
+    if(!surface&&!input)return;
+    const composer=input?.closest('form,[data-composer-body],.composer')||input;
+    const bounds=(surface||document.documentElement).getBoundingClientRect();
+    const top=Math.max(0,bounds.top),left=Math.max(0,bounds.left),right=Math.min(innerWidth,bounds.right);
+    const bottom=Math.max(top,Math.min(innerHeight,bounds.bottom,composer?composer.getBoundingClientRect().top-12:innerHeight));
+    // Neutralize an inherited host CSS zoom: the measured bounds are already
+    // viewport coordinates. Native page zoom instead changes innerWidth itself.
+    const zoom=String(1/(Number(getComputedStyle(document.body).zoom)||1));
+    if(root.style.zoom!==zoom)root.style.zoom=zoom;
+    const inset=`${top}px ${Math.max(0,innerWidth-right)}px ${Math.max(0,innerHeight-bottom)}px ${left}px`;
+    if(root.style.inset!==inset)root.style.inset=inset;
+    const targets=[surface,composer].filter(Boolean);
+    if(targets.length!==layoutTargets.length||targets.some((target,index)=>target!==layoutTargets[index])){
+      layoutResize.disconnect();layoutTargets=targets;targets.forEach(target=>layoutResize.observe(target));
+    }
+  }
+  const layoutMutations=new MutationObserver(queueLayout);
+  layoutMutations.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','style']});
+  window.addEventListener('resize',queueLayout);
   function click(event) {
     const action=event.target.closest('[data-action]')?.dataset.action;
     if (!action)return;
@@ -117,6 +145,6 @@
   const modalObserver=new MutationObserver(modalTick);modalObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal']});
   const interval=setInterval(()=>{clock();if(state.quota)renderQuota();},1000);
   window.__codexEva={updateState,setSettings:patch=>applySettings(patch),openSettings:()=>{$('[data-settings]').hidden=false;modalTick();},getSettings:()=>({...settings}),getPilot:()=>pilot,
-    dispose(){if(disposed)return;disposed=true;clearInterval(interval);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
-  applySettings(settings);theme();clock();hostModal();updateState();
+    dispose(){if(disposed)return;disposed=true;clearInterval(interval);cancelAnimationFrame(layoutFrame);layoutResize.disconnect();layoutMutations.disconnect();window.removeEventListener('resize',queueLayout);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
+  applySettings(settings);theme();clock();hostModal();updateState();layout();
 })();

@@ -43,6 +43,7 @@ test('双角色工作台：切换、设置、额度缺失、模态避让及卸�
     await evaluate('document.querySelector("#host-dialog").close();new Promise(r=>setTimeout(r,40))');
     assert.equal(await evaluate('document.querySelector("#codex-eva-root").hidden'), false);
     await page.send('Emulation.setDeviceMetricsOverride', {width:700,height:850,deviceScaleFactor:1,mobile:false});
+    await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
     // The overlay must not steal clicks from the host page underneath it.
     const hit = await evaluate('(()=>{const r=document.querySelector("#approve").getBoundingClientRect();const el=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return el&&(el.id==="approve"||el.closest?.("#approve")!==null);})()');
     assert.equal(hit, true);

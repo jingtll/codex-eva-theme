@@ -15,6 +15,36 @@ async function mount(harness, { theme = 'dark' } = {}) {
   await harness.evaluate(`window.__EVA_ASSETS__={};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
 }
 
+test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前输入区', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
+  const harness=await openPage();
+  try {
+    const shellFixture=await readFile(new URL('./fixtures/workbench-shell.html',import.meta.url),'utf8');
+    await harness.resize(1800,916);
+    await harness.setHtml(shellFixture);
+    await harness.evaluate(`window.__EVA_ASSETS__={};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
+    for(const [width,panel] of [[1800,false],[1800,true],[1250,true],[900,false],[560,false]]){
+      await harness.resize(width,916);
+      await harness.evaluate(`document.querySelector('.aux').hidden=${!panel};new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
+      const layout=await harness.evaluate(`(()=>{
+        const root=document.querySelector('${ROOT}');const shadow=root.shadowRoot;
+        const box=e=>{const b=e.getBoundingClientRect();return {left:b.left,right:b.right,top:b.top,bottom:b.bottom,width:b.width,height:b.height}};
+        return {root:box(root),main:box(document.querySelector('#active-workbench')),composer:box(document.querySelector('form')),portrait:box(shadow.querySelector('.portrait')),geometry:box(shadow.querySelector('.geometry')),rail:box(shadow.querySelector('.rail'))};
+      })()`);
+      const label=`${width}px, side panel ${panel}`;
+      assert.ok(Math.abs(layout.root.left-layout.main.left)<1,`overlay starts at visible workbench: ${label}`);
+      assert.ok(layout.root.right<=layout.main.right+1,`overlay ends at workbench: ${label}`);
+      assert.ok(layout.root.bottom<=layout.composer.top,`overlay leaves composer clear: ${label}`);
+      for(const name of ['portrait','geometry','rail']){
+        assert.ok(layout[name].left>=layout.root.left-1,`${name} stays after sidebar: ${label}`);
+        assert.ok(layout[name].right<=layout.root.right+1,`${name} stays before side panel: ${label}`);
+      }
+      assert.equal(await harness.evaluate(hitTest('#visible-editor')),'hit',`input remains clickable: ${label}`);
+    }
+    await harness.evaluate('window.__codexEva.dispose()');
+    assert.equal(await harness.evaluate(`document.querySelector('${ROOT}')`),null);
+  } finally { await harness.close(); }
+});
+
 test('双角色工作台：切换、设置、额度缺失、模态避让及卸载', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
   const harness = await openPage();
   const { evaluate, page } = harness;
