@@ -8,7 +8,8 @@
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File uninstall.ps1
 
 param(
-  [switch]$Uninstall
+  [switch]$Uninstall,
+  [switch]$CreateShortcut
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,6 +67,7 @@ if ($null -ne $Existing -and $null -ne $Existing.registry) { $ExistingValue = [s
 
 if ($Uninstall) {
   if ($null -eq $Existing) {
+    & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove
     Write-Output 'REG-OK: no receipt'
     exit 0
   }
@@ -99,6 +101,7 @@ if ($Uninstall) {
     }
   }
 
+  & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove
   $SettingsPath = Join-Path $DataDir 'settings.json'
   if (Test-Path -LiteralPath $SettingsPath -PathType Leaf) {
     Remove-Item -LiteralPath $SettingsPath -Force
@@ -149,12 +152,14 @@ $Receipt = [ordered]@{
 }
 # The prepared receipt preserves both sides of an interrupted registry update.
 Write-ReceiptAtomically $Receipt
+$HadShortcutReceipt = Test-Path -LiteralPath (Join-Path $DataDir 'shortcut-receipt.json') -PathType Leaf
 try {
   if ($CurrentValue -eq $Command) { Write-Output 'REG-OK: already up to date' }
   else {
     Set-ItemProperty -Path $RunKey -Name $RunName -Value $Command -ErrorAction Stop
     Write-Output "REG-OK: command = $Command"
   }
+  if ($CreateShortcut) { & (Join-Path $PSScriptRoot 'shortcut.ps1') }
   $Receipt.phase = 'committed'
   Write-ReceiptAtomically $Receipt
 } catch {
@@ -166,6 +171,7 @@ try {
   }
   if ($null -ne $Existing) { Write-ReceiptAtomically $Existing }
   else { Remove-Item -LiteralPath $ReceiptPath -Force }
+  if ($CreateShortcut -and -not $HadShortcutReceipt) { & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove }
   throw
 }
 Write-Output "安装收据：$ReceiptPath"

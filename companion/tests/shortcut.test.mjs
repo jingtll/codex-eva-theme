@@ -1,0 +1,54 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,readFile,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {execFile as callback} from 'node:child_process';
+import {promisify} from 'node:util';
+const execFile=promisify(callback);
+const script=fileURLToPath(new URL('../windows/shortcut.ps1',import.meta.url));
+
+test('desktop shortcut is repeatable and removal preserves a user-modified shortcut', {skip:process.platform!=='win32'},async t=>{
+  const root=await mkdtemp(join(tmpdir(),'eva-shortcut-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const desktop=join(root,'Desktop'),appdata=join(root,'AppData');
+  await mkdir(desktop);
+  const run=extra=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-ShortcutDirectory',desktop,...extra],{env:{...process.env,APPDATA:appdata},encoding:'utf8'});
+  await run([]);
+  const link=join(desktop,'Codex EVA.lnk');
+  const first=await readFile(link);
+  await run([]);
+  assert.deepEqual(await readFile(link),first);
+  await writeFile(link,'user changed this shortcut');
+  await assert.rejects(run([]),/SHORTCUT_CONFLICT/);
+  await run(['-Remove']);
+  assert.equal(await readFile(link,'utf8'),'user changed this shortcut');
+  await rm(link);
+  await run([]);
+  await run(['-Remove']);
+  await assert.rejects(readFile(link),/ENOENT/);
+});
+
+test('launcher resolves the installed package each time, uses loopback, and refuses to restart normal sessions', {skip:process.platform!=='win32'},async t=>{
+  const root=await mkdtemp(join(tmpdir(),'eva-launch-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  await mkdir(join(root,'app'));
+  await writeFile(join(root,'app','ChatGPT.exe'),'fixture, never executed');
+  const launcher=fileURLToPath(new URL('../windows/launch.ps1',import.meta.url));
+  const command=`
+    . $env:EVA_TEST_LAUNCH
+    function Get-AppxPackage { [pscustomobject]@{InstallLocation=$env:EVA_TEST_PACKAGE} }
+    function Get-CimInstance { if($env:EVA_TEST_RUNNING -eq '1'){[pscustomobject]@{ExecutablePath=(Join-Path $env:EVA_TEST_PACKAGE 'app\\ChatGPT.exe');CommandLine='ChatGPT.exe'}} }
+    function Start-Process { param($FilePath,$ArgumentList,$WindowStyle) [Console]::WriteLine(('SPAWN:'+(@{file=$FilePath;arguments=@($ArgumentList);style=$WindowStyle}|ConvertTo-Json -Compress))) }
+    try { Start-EvaCodex } catch { [Console]::WriteLine($_.Exception.Message); exit 3 }
+  `;
+  const run=running=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',Buffer.from(command,'utf16le').toString('base64')],{encoding:'utf8',env:{...process.env,EVA_TEST_LAUNCH:launcher,EVA_TEST_PACKAGE:root,EVA_TEST_RUNNING:running}});
+  const result=await run('0');
+  const calls=result.stdout.trim().split(/\r?\n/).filter(line=>line.startsWith('SPAWN:')).map(line=>JSON.parse(line.slice(6)));
+  assert.equal(calls.length,2);
+  assert.equal(calls[0].style,'Hidden');
+  assert.equal(calls[1].file,join(root,'app','ChatGPT.exe'));
+  assert.deepEqual(calls[1].arguments,['--remote-debugging-port=19327','--remote-debugging-address=127.0.0.1']);
+  await assert.rejects(run('1'),error=>error.stdout.includes('CODEX_RESTART_REQUIRED')&&!error.stdout.includes('SPAWN:'));
+});
