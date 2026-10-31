@@ -146,6 +146,9 @@ export async function startCompanion(options = {}) {
     sendTray,
     onCommand = () => {},
     pollMs = 5000,
+    // Port the user launched Codex with (--remote-debugging-port). Read from the
+    // environment so the default discovery call actually has somewhere to look.
+    debugPort = Number(process.env.CODEX_EVA_DEBUG_PORT) || null,
     now = () => Date.now(),
   } = options;
 
@@ -195,7 +198,7 @@ export async function startCompanion(options = {}) {
 
   const lifecycle = createLifecycle({
     findTarget: async () => {
-      const result = await findTarget();
+      const result = debugPort ? await findTarget({ port: debugPort }) : await findTarget();
       // discovery returns a status record; tests may inject a bare target.
       if (result && typeof result.webSocketDebuggerUrl === 'string' && result.status !== 'endpoint_unavailable') return result;
       return null;

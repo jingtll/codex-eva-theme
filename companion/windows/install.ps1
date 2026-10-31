@@ -8,7 +8,6 @@
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File uninstall.ps1
 
 param(
-  [switch]$Install,
   [switch]$Uninstall
 )
 

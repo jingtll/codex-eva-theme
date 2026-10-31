@@ -1,14 +1,32 @@
-# Codex EVA 伴随程序
+﻿# Codex EVA 伴随程序
 
-从原来的 Codex 图标启动 Codex 后，自动给工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
+给 Codex 工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
 
-日常不需要新的启动入口。伴随程序开机后驻留托盘，检测到带本机调试端口的 Codex 就接入；没有就显示「等待 Codex 调试入口」。
+**前提**：当前 Codex 版本的普通启动不带调试端口，伴随程序接不上。你需要用带调试端口的方式启动 Codex（见下文「启动 Codex」），日常仍可从原图标启动 Codex，但那样不会有皮肤。这一点在验证出更好的接入方式前不会改变，详见 `docs/validation/acceptance.md`「已知阻碍」。
+
+启动 Codex 后，伴随程序开机驻留托盘，检测到本机调试端点就接入；没有就显示「等待 Codex 调试入口」。
 
 ## 环境要求
 
 - Windows 10/11
 - Node.js 22+（`node --version`）
 - Windows PowerShell 5.1（安装与托盘用；PowerShell 7 不支持 WinRT 媒体桥的写法）
+
+## 启动 Codex
+
+用带调试参数的方式启动（需先完全退出已运行的 Codex）：
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\ChatGPT\ChatGPT.exe" --remote-debugging-port=19327 --remote-debugging-address=127.0.0.1
+```
+
+实际路径以 `node src/diagnose.mjs` 输出的发现结果为准。若想从快捷方式启动，请**先备份原快捷方式**再修改其“目标”字段。
+
+然后让伴随程序连这个端口：
+
+```powershell
+$env:CODEX_EVA_DEBUG_PORT="19327"; npm start
+```
 
 ## 先诊断
 

@@ -304,3 +304,21 @@ test('a stale lock left by a dead process is taken over', async (t) => {
   await instance.stop();
   await assert.rejects(readFile(`${file}.lock`, 'utf8'), /ENOENT/);
 });
+
+test('the default discovery is asked for the configured debugging port', async (t) => {
+  const seen = [];
+  const instance = await startCompanion({
+    findTarget: async (options) => { seen.push(options?.port ?? null); return null; },
+    debugPort: 19327,
+    attach: async () => { throw new Error('unused'); },
+    createNotifier: () => ({ accept: () => null }),
+    playCue: async () => ({ ok: true }),
+    settingsPath: await settingsFile(t),
+    pollMs: 5,
+    sendTray: () => {},
+    stopSounds,
+  });
+  await waitFor(() => seen.length >= 1);
+  assert.equal(seen[0], 19327);
+  await instance.stop();
+});
