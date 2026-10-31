@@ -1,5 +1,7 @@
 # 火绒拦截后的直接启动入口修复
 
+> 后续更正：本文件的包内 exe 直启方案会丢失 MSIX 身份，影响任务栏分组和桌宠识别，现已撤回。当前改用官方执行别名，见 [MSIX 身份修复](2026-10-31-msix-entry-identity.md)。以下保留历史验证，不能据此认定 Windows 集成正常。
+
 ## 范围与依据
 
 用户提供火绒日志：2026-10-31 16:28:01，文件实时监控将 `E:\codex-eva-theme\companion\Codex EVA.lnk` 判为 `TrojanDownloader/LNK.Agent.g`，删除文件。旧入口目标是 PowerShell，含隐藏窗口及 ExecutionPolicy Bypass，随后启动脚本和 Node。具体检测规则未知，不能据检测名称断言误报。

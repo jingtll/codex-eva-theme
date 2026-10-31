@@ -25,6 +25,8 @@
 
 用户已允许新增快捷方式，火绒拦截后已按确认方案改为官方程序直接启动、伴随程序独立运行；**完整体验仍待真实账号和重启验收**。原 MSIX 入口保留，当前 Codex 未被重启。详见 [直接入口修复](../../validation/2026-10-31-direct-client-entry.md) 和 [验收记录](../../validation/acceptance.md)。
 
+后续发现包内 exe 启动缺少 MSIX 身份，任务栏分组和桌宠受影响；当前已改为官方执行别名，裸 exe 路线撤回。正式快捷方式的隔离包身份/应用 ID/调试端口验证通过，真实两款桌宠恢复仍待用户保存并重启客户端，见 [MSIX 修复](../../validation/2026-10-31-msix-entry-identity.md)。
+
 ## Global Constraints
 
 - 第一版只面向用户自己的 Windows 环境；公开分发与其他平台另行设计。

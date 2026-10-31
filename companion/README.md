@@ -2,7 +2,7 @@
 
 给 Codex 工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
 
-当前使用新增的 **Codex EVA** 快捷方式直接启动官方客户端，伴随程序独立运行。原 MSIX 图标保留，普通启动不带调试端口，因此没有皮肤。首次使用前请先保存工作并完全退出正在普通模式运行的 Codex。新快捷方式不经过脚本检查，也不会提示或替你关闭聊天；已有普通实例可能直接复用，无法因此补开端口。
+当前使用新增的 **Codex EVA** 快捷方式，通过官方 MSIX 执行别名启动客户端，伴随程序独立运行。原 MSIX 图标保留，普通启动不带调试端口，因此没有皮肤。首次使用前请先保存工作并完全退出 Codex，包括旧的无包身份实例。新快捷方式不经过脚本检查，也不会提示或替你关闭聊天；已有普通实例可能直接复用，无法因此补开端口。
 
 启动 Codex 后，伴随程序开机驻留托盘，检测到本机调试端点就接入；没有就显示「等待 Codex 调试入口」。
 
@@ -20,7 +20,11 @@
 powershell -NoProfile -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion" -StartCompanion
 ```
 
-之后打开 `companion\Codex EVA.lnk`。快捷方式直接指向安装时发现的官方 `ChatGPT.exe`，参数只有调试端口及 loopback 地址，不再运行隐藏 PowerShell 或覆盖执行策略。它不负责启动伴随程序：Run 项负责下次登录自启，安装命令中的 `-StartCompanion` 负责本次独立启动。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
+之后打开 `companion\Codex EVA.lnk`。快捷方式指向 `%LOCALAPPDATA%\Microsoft\WindowsApps\chatgpt-desktop.exe`，这是官方 MSIX 主应用注册的执行别名，参数只有调试端口及 loopback 地址，不经过隐藏 PowerShell 或执行策略覆盖。创建前验证当前官方包的主应用及别名注册，缺失时报告 `CODEX_ALIAS_UNAVAILABLE`，不会退回包内裸 exe。
+
+不能直接启动版本目录内的 `app\ChatGPT.exe`：本机实测会丢失包身份，造成任务栏身份分组和桌宠窗口识别兼容问题。此处已用官方别名替代；两个桌宠的最终识别仍以真实重启验收为准。
+
+快捷方式不负责启动伴随程序：Run 项负责下次登录自启，安装命令中的 `-StartCompanion` 负责本次独立启动。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
 
 单独启动伴随程序、使其不依附当前终端或 Codex：
 
@@ -34,7 +38,7 @@ powershell -NoProfile -File companion\windows\start.ps1 -NodePath (Get-Command n
 
 快捷方式和图标记录哈希，卸载从收据读取原目录，保留用户修改。仅创建或移除入口、不修改开机启动项时，分别运行 `companion\windows\shortcut.ps1`（可带 `-ShortcutDirectory`）或加 `-Remove`。
 
-官方更新后路径可能变化。重新运行创建脚本会检测过期入口并报 `SHORTCUT_REFRESH_REQUIRED`；先运行下列命令移除匹配的自有入口，再重复安装命令生成当前版本入口。此过程也用于仍存在的旧版脚本入口，不会自动恢复旧版准备态快捷方式。
+Windows 负责把稳定别名关联到当前官方版本，不再把版本目录作为启动目标。旧版 v1 脚本入口、v2 裸 exe 入口或已变化的别名需先移除再重建，创建脚本会报 `SHORTCUT_REFRESH_REQUIRED`；不会恢复旧版准备态。先运行下列命令移除匹配的自有入口，再重复安装命令。
 
 ```powershell
 powershell -NoProfile -File companion\windows\shortcut.ps1 -Remove
@@ -43,11 +47,10 @@ powershell -NoProfile -File companion\windows\shortcut.ps1 -Remove
 用带调试参数的方式启动（需先完全退出已运行的 Codex）：
 
 ```powershell
-$package = Get-AppxPackage -Name OpenAI.Codex
-& (Join-Path $package.InstallLocation 'app\ChatGPT.exe') --remote-debugging-port=19327 --remote-debugging-address=127.0.0.1
+& "$env:LOCALAPPDATA\Microsoft\WindowsApps\chatgpt-desktop.exe" --remote-debugging-port=19327 --remote-debugging-address=127.0.0.1
 ```
 
-实际路径以 `node src/diagnose.mjs` 输出的发现结果为准。若想从快捷方式启动，请**先备份原快捷方式**再修改其“目标”字段。
+`node src/diagnose.mjs` 发现的包内 exe 路径用于只读诊断与图标读取，日常启动使用上面的官方别名。通过安装脚本生成新入口，保留原 MSIX 入口。
 
 伴随程序会从运行中的客户端发现调试端口；也支持显式指定：
 
@@ -103,6 +106,8 @@ powershell -NoProfile -File companion\windows\uninstall.ps1
 ```sh
 npm test                     # 契约测试（含 PowerShell 脚本解析、安装/卸载）
 ```
+
+已安装官方 MSIX 客户端的 Windows 环境可显式运行 `npm run test:msix-entry`：它用全新空目录启动正式脚本生成的临时快捷方式，验证实际进程的包身份、应用 ID 和 loopback 调试端口；结束时只关闭携带该测试独有数据路径的实例。该项不包含在普通契约或浏览器夹具中，也不证明两个桌宠已完成真实交互验收。
 
 浏览器布局夹具需要显式给出一个无界面浏览器的调试端点：
 
