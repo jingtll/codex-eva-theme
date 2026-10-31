@@ -17,10 +17,18 @@
 在仓库根目录运行一次安装（Windows PowerShell 5.1）：
 
 ```powershell
-powershell -NoProfile -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion"
+powershell -NoProfile -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion" -StartCompanion
 ```
 
-之后打开 `companion\Codex EVA.lnk`。快捷方式直接指向安装时发现的官方 `ChatGPT.exe`，参数只有调试端口及 loopback 地址，不再运行隐藏 PowerShell 或覆盖执行策略。它不负责启动伴随程序：安装注册的是下次登录自启，本次可另开终端运行 `npm start --prefix companion`；关闭该控制台会停止伴随程序。
+之后打开 `companion\Codex EVA.lnk`。快捷方式直接指向安装时发现的官方 `ChatGPT.exe`，参数只有调试端口及 loopback 地址，不再运行隐藏 PowerShell 或覆盖执行策略。它不负责启动伴随程序：Run 项负责下次登录自启，安装命令中的 `-StartCompanion` 负责本次独立启动。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
+
+单独启动伴随程序、使其不依附当前终端或 Codex：
+
+```powershell
+powershell -NoProfile -File companion\windows\start.ps1 -NodePath (Get-Command node.exe).Source
+```
+
+该脚本通过本机 `Win32_Process.Create` 直接启动 Node，不新增服务或计划任务、不修改系统执行策略。与入口和 Run 项分别承担职责；已经运行时由单实例锁阻止重复接入。安装的 `-StartCompanion` 在收据提交后执行，启动失败会明确报告安装配置仍已保存，可重试上面的命令。
 
 不指定 `-ShortcutDirectory` 时默认生成到桌面。本机旧入口被火绒判为 `TrojanDownloader/LNK.Agent.g` 并删除，换目录并未解决。本轮新入口和伴随程序目录经火绒自定义扫描：78 个对象，风险 0 个；扫描后入口仍在。该结果不代表点击启动及后续行为均已验收。没有关闭防护或添加信任。
 

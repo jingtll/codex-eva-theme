@@ -77,6 +77,8 @@ test('launcher resolves the installed package each time, uses loopback, and refu
     . $env:EVA_TEST_LAUNCH
     function Get-AppxPackage { [pscustomobject]@{InstallLocation=$env:EVA_TEST_PACKAGE} }
     function Get-CimInstance { if($env:EVA_TEST_RUNNING -eq '1'){[pscustomobject]@{ExecutablePath=(Join-Path $env:EVA_TEST_PACKAGE 'app\\ChatGPT.exe');CommandLine='ChatGPT.exe'}} }
+    function New-CimInstance { param($ClassName,[switch]$ClientOnly,$Property) [pscustomobject]@{} }
+    function Invoke-CimMethod { param($ClassName,$MethodName,$Arguments) [Console]::WriteLine(('SPAWN:'+(@{file='Windows process service';arguments=@($Arguments.CommandLine);style='Independent'}|ConvertTo-Json -Compress))); [pscustomobject]@{ReturnValue=0;ProcessId=123} }
     function Start-Process { param($FilePath,$ArgumentList,$WindowStyle) [Console]::WriteLine(('SPAWN:'+(@{file=$FilePath;arguments=@($ArgumentList);style=$WindowStyle}|ConvertTo-Json -Compress))) }
     try { Start-EvaCodex } catch { [Console]::WriteLine($_.Exception.Message); exit 3 }
   `;
@@ -84,7 +86,7 @@ test('launcher resolves the installed package each time, uses loopback, and refu
   const result=await run('0');
   const calls=result.stdout.trim().split(/\r?\n/).filter(line=>line.startsWith('SPAWN:')).map(line=>JSON.parse(line.slice(6)));
   assert.equal(calls.length,2);
-  assert.equal(calls[0].style,'Hidden');
+  assert.equal(calls[0].style,'Independent');
   assert.equal(calls[1].file,join(root,'app','ChatGPT.exe'));
   assert.deepEqual(calls[1].arguments,['--remote-debugging-port=19327','--remote-debugging-address=127.0.0.1']);
   await assert.rejects(run('1'),error=>error.stdout.includes('CODEX_RESTART_REQUIRED')&&!error.stdout.includes('SPAWN:'));

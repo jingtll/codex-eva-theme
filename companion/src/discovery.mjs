@@ -42,7 +42,7 @@ async function readRunningCodexProcesses(nameFilter = CODEX_PROCESS_NAME) {
   if (!PROCESS_NAME_PATTERN.test(nameFilter)) throw new Error('DISCOVERY_PROCESS_NAME_INVALID');
   // Only derived fields leave PowerShell. The full process command line is never returned.
   const script = String.raw`
-$items = @(Get-CimInstance Win32_Process -Filter "Name='${nameFilter}'" -ErrorAction SilentlyContinue | ForEach-Object {
+$items = @(Get-CimInstance Win32_Process -Filter "Name='${nameFilter}'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -notmatch '(?:^|\s)--type=' } | ForEach-Object {
   $fileVersion = $null
   try { $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($_.ExecutablePath).FileVersion } catch {}
   $debugPort = $null

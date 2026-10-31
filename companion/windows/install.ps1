@@ -10,7 +10,8 @@
 param(
   [switch]$Uninstall,
   [switch]$CreateShortcut,
-  [string]$ShortcutDirectory
+  [string]$ShortcutDirectory,
+  [switch]$StartCompanion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -186,3 +187,7 @@ try {
 }
 Write-Output "安装收据：$ReceiptPath"
 Write-Output '伴随程序已注册自启；只有检测到本机调试入口及已验证版本后才会接入。'
+if ($StartCompanion) {
+  try { & (Join-Path $PSScriptRoot 'start.ps1') -NodePath $Node }
+  catch { throw ('安装配置已保存，但本次伴随程序启动失败：' + $_.Exception.Message) }
+}
