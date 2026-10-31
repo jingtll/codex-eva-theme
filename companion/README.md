@@ -22,7 +22,7 @@ powershell -NoProfile -File companion\windows\install.ps1 -CreateShortcut -Short
 
 之后打开 `companion\Codex EVA.lnk`。快捷方式指向 `%LOCALAPPDATA%\Microsoft\WindowsApps\chatgpt-desktop.exe`，这是官方 MSIX 主应用注册的执行别名，参数只有调试端口及 loopback 地址，不经过隐藏 PowerShell 或执行策略覆盖。创建前验证当前官方包的主应用及别名注册，缺失时报告 `CODEX_ALIAS_UNAVAILABLE`，不会退回包内裸 exe。
 
-不能直接启动版本目录内的 `app\ChatGPT.exe`：本机实测会丢失包身份，造成任务栏身份分组和桌宠窗口识别兼容问题。此处已用官方别名替代；两个桌宠的最终识别仍以真实重启验收为准。
+不能直接启动版本目录内的 `app\ChatGPT.exe`：本机实测会丢失包身份，并被 Codex Maid Widget 的官方窗口识别规则拒绝；应用 ID 缺失也与用户报告的任务栏额外分组相符。此处已用官方别名替代；任务栏分组和两个桌宠的最终识别仍以真实重启验收为准。
 
 快捷方式不负责启动伴随程序：Run 项负责下次登录自启，安装命令中的 `-StartCompanion` 负责本次独立启动。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
 
