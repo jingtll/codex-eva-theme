@@ -1,14 +1,28 @@
-import {connectCdp} from './cdp.mjs';
+import {connectCdp as defaultConnectCdp} from './cdp.mjs';
 import {classifyThread,mapNotification} from './host.mjs';
 import {normalizeQuota} from './quota.mjs';
 
-export async function attachSession(target,{bundle,media,notifier,getSettings,setSettings,playCue,onStatus=()=>{}}){
+export async function attachSession(target,{bundle,media,notifier,getSettings,setSettings,playCue,onStatus=()=>{},onReload=()=>{},connectCdp=defaultConnectCdp}){
   const cdp=await connectCdp(target.webSocketDebuggerUrl,{timeoutMs:10000});
   let scriptId,disposed=false,visible=false,quota=null,pilot='asuka',sampling=false,mediaGeneration=0;
   const sources=new Map();let commandTail=Promise.resolve();
   let contextId=null;
   const frame=(await cdp.send('Page.getFrameTree')).frameTree.frame.id;
-  const offContext=cdp.on('Runtime.executionContextCreated',({context})=>{if(context.auxData?.isDefault&&context.auxData.frameId===frame)contextId=context.id;});
+  // A navigation (Ctrl+R, host reload) discards the old default context and
+  // creates a new one. Page.addScriptToEvaluateOnNewDocument already re-runs the
+  // bundle for the new document, so this handler re-dials the new context, tells
+  // the page which settings are current, and reports a reload to the caller.
+  // Without it, evaluate() would keep targeting the destroyed context until the
+  // target id changed and the lifecycle reconnected, leaving the page bare.
+  let reloads=0;
+  const offContext=cdp.on('Runtime.executionContextCreated',({context})=>{
+    if(!(context.auxData?.isDefault&&context.auxData.frameId===frame))return;
+    const first=contextId===null;contextId=context.id;
+    if(first)return;
+    reloads+=1;
+    evaluate(`window.__evaInstall?.(${JSON.stringify(getSettings())})`).catch(()=>{});
+    onReload();
+  });
   const offDestroyed=cdp.on('Runtime.executionContextsCleared',()=>{contextId=null;sources.clear();quota=null;});
   const evaluate=async expression=>{
     if(disposed)return;
@@ -20,7 +34,7 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
   async function cue(kind,selected=pilot,preview=false){const s=getSettings();if(!preview&&(s.sound===false||s[kind==='approval'?'approvalSound':'completedSound']===false))return;await playCue({pilot:selected,kind,volume:s.volume??0.6});}
   async function command(value){
     if(value.action==='pilot'){if(['rei','asuka'].includes(value.pilot))pilot=value.pilot;}
-    else if(value.action==='refresh')await evaluate('window.__evaAdapter?.refresh()');
+    else if(value.action==='refresh')await evaluate('window.__evaQuota?.refresh()');
     else if(value.action==='settings'){await setSettings(value.settings);await evaluate(`window.__codexEva?.setSettings(${JSON.stringify(getSettings())})`);if(getSettings().music===false){mediaGeneration++;media.close();}}
     else if(value.action==='cue'&&['approval','completed'].includes(value.kind))await cue(value.kind,pilot,true);
     else if(value.action==='media'&&['playpause','next','previous'].includes(value.command)){
@@ -58,7 +72,11 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
   }catch(error){offContext();offDestroyed();offBinding();cdp.close();throw error;}
   return {
     syncSettings(patch){return evaluate(`window.__evaInstall?.(${JSON.stringify(patch)})`);},
+    // Re-injects the bundle if the page lost it (e.g. the composer was not yet
+    // present when the new document loaded). Cheap when the skin is mounted.
+    async ensureMounted(){if(disposed)return;await evaluate('(()=>{if(!window.__codexEva&&window.__evaInstall)window.__evaInstall()})()');},
     async tick(){visible=await evaluate('document.visibilityState==="visible" && !!window.__codexEva');await sampleMedia();},
+    get reloads(){return reloads;},
     openSettings:()=>evaluate('window.__codexEva?.openSettings()'),
     async close(){
       if(disposed)return;mediaGeneration++;media.close();
