@@ -92,8 +92,8 @@ test('install records a receipt, a rerun is idempotent, and uninstall removes on
   assert.match(first.stdout, /REG-OK: command = /);
   const receipt = await readReceipt(home);
   assert.equal(receipt.registry.name, runName);
-  assert.match(receipt.registry.command, /-WindowStyle Hidden/);
-  assert.match(receipt.registry.command, /start\.ps1/);
+  assert.match(receipt.registry.command, /^"[^"\r\n]+node\.exe" "[^"\r\n]+main\.mjs"$/i);
+  assert.doesNotMatch(receipt.registry.command, /powershell|ExecutionPolicy|WindowStyle/i);
   assert.equal(await registryValue(), receipt.registry.command);
 
   const second = await runInstall(home);
@@ -201,4 +201,34 @@ test('uninstall recovers the original startup value after an upgrade stops befor
   await writeFile(join(home,'AppData','Roaming','CodexEva','install-receipt.json'),JSON.stringify(prepared));
   await runInstall(home,uninstallScript);
   assert.equal(await registryValue(),userEntry);
+});
+
+test('migration from a recorded shell startup preserves the original value and rolls back a shortcut conflict', async t => {
+  if (!(await hasRegistryWrite())) { t.skip('registry writes are blocked in this shell'); return; }
+  const original = await registryValue();
+  const home = await mkdtemp(join(tmpdir(), 'eva-shell-migration-'));
+  t.after(async () => { await setRegistryValue(original); await rm(home, { recursive: true, force: true }); });
+  await setRegistryValue(userEntry);
+  await runInstall(home);
+  const receipt = await readReceipt(home);
+  const oldCommand = '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "E:\\old\\start.ps1"';
+  const receiptPath = join(home, 'AppData', 'Roaming', 'CodexEva', 'install-receipt.json');
+  const legacy = { ...receipt, registry: { ...receipt.registry, command: oldCommand } };
+  await writeFile(receiptPath, JSON.stringify(legacy));
+  await setRegistryValue(oldCommand);
+  const desktop = join(home, 'Desktop');
+  await mkdir(desktop);
+  const link = join(desktop, 'Codex EVA.lnk');
+  await writeFile(link, 'user-owned file');
+  await assert.rejects(execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', installScript, '-CreateShortcut', '-ShortcutDirectory', desktop], {
+    encoding: 'utf8', env: { ...process.env, APPDATA: join(home, 'AppData', 'Roaming'), CODEX_EVA_RUN_KEY: RUN_KEY },
+  }), /SHORTCUT_CONFLICT/);
+  assert.equal(await registryValue(), oldCommand);
+  assert.equal((await readReceipt(home)).registry.command, oldCommand);
+  assert.equal(await readFile(link, 'utf8'), 'user-owned file');
+  await runInstall(home);
+  assert.equal(await registryValue(), receipt.registry.command);
+  assert.equal((await readReceipt(home)).registry.previousValue, userEntry);
+  await runInstall(home, uninstallScript);
+  assert.equal(await registryValue(), userEntry);
 });

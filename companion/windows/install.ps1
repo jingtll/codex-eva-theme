@@ -114,9 +114,9 @@ if (-not $Node) { throw '未找到 Node.js 22 或更高版本。' }
 $Version = (& $Node --version) -replace '^v', ''
 if ([int]$Version.Split('.')[0] -lt 22) { throw '需要 Node.js 22 或更高版本。' }
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
-$StartScript = Join-Path $PSScriptRoot 'start.ps1'
-$PowerShell = Join-Path $PSHOME 'powershell.exe'
-$Command = '"{0}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}" -NodePath "{2}"' -f $PowerShell, $StartScript, $Node
+# Keep the startup command transparent: no shell or execution-policy override.
+# node.exe may show a console; closing it stops the companion.
+$Command = '"{0}" "{1}"' -f $Node, $Entry
 $CurrentValue = $null
 try { $CurrentValue = (Get-ItemProperty -Path $RunKey -Name $RunName -ErrorAction Stop).$RunName } catch { }
 $PreviousValue = $CurrentValue

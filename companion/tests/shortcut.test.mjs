@@ -17,6 +17,15 @@ test('desktop shortcut is repeatable and removal preserves a user-modified short
   const run=extra=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-ShortcutDirectory',desktop,...extra],{env:{...process.env,APPDATA:appdata},encoding:'utf8'});
   await run([]);
   const link=join(desktop,'Codex EVA.lnk');
+  const inspected=await execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',`
+    $link=(New-Object -ComObject WScript.Shell).CreateShortcut($env:EVA_TEST_LINK)
+    $package=Get-AppxPackage -Name OpenAI.Codex
+    @{target=$link.TargetPath;expected=(Join-Path $package.InstallLocation 'app\\ChatGPT.exe');arguments=$link.Arguments;style=$link.WindowStyle} | ConvertTo-Json -Compress
+  `],{encoding:'utf8',env:{...process.env,EVA_TEST_LINK:link}});
+  const properties=JSON.parse(inspected.stdout);
+  assert.equal(properties.target,properties.expected);
+  assert.equal(properties.arguments,'--remote-debugging-port=19327 --remote-debugging-address=127.0.0.1');
+  assert.equal(properties.style,1);
   const first=await readFile(link);
   await run([]);
   assert.deepEqual(await readFile(link),first);
@@ -31,6 +40,31 @@ test('desktop shortcut is repeatable and removal preserves a user-modified short
   await run([]);
   await execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-Remove'],{env:{...process.env,APPDATA:appdata}});
   await assert.rejects(readFile(link),/ENOENT/);
+});
+
+test('a stale owned shortcut requires explicit removal and a failed lookup creates nothing', {skip:process.platform!=='win32'},async t=>{
+  const root=await mkdtemp(join(tmpdir(),'eva-shortcut-stale-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const desktop=join(root,'Desktop'),appdata=join(root,'AppData');
+  const run=extra=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-File',script,'-ShortcutDirectory',desktop,...extra],{env:{...process.env,APPDATA:appdata},encoding:'utf8'});
+  await run([]);
+  const link=join(desktop,'Codex EVA.lnk'),receiptPath=join(appdata,'CodexEva','shortcut-receipt.json');
+  const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
+  receipt.executable='C:\\Old Package\\ChatGPT.exe';
+  await writeFile(receiptPath,JSON.stringify(receipt));
+  const before=await readFile(link);
+  await assert.rejects(run([]),/SHORTCUT_REFRESH_REQUIRED/);
+  assert.deepEqual(await readFile(link),before);
+  receipt.version=1;
+  receipt.phase='prepared';
+  await writeFile(receiptPath,JSON.stringify(receipt));
+  await assert.rejects(run([]),/SHORTCUT_REFRESH_REQUIRED/);
+  assert.deepEqual(await readFile(link),before);
+  await run(['-Remove']);
+  const command=`function Get-AppxPackage { @() }; & $env:EVA_TEST_SCRIPT -ShortcutDirectory $env:EVA_TEST_DESKTOP`;
+  await assert.rejects(execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{env:{...process.env,APPDATA:appdata,EVA_TEST_SCRIPT:script,EVA_TEST_DESKTOP:desktop}}),/CODEX_INSTALL_NOT_UNIQUE/);
+  await assert.rejects(readFile(link),/ENOENT/);
+  await assert.rejects(readFile(receiptPath),/ENOENT/);
 });
 
 test('launcher resolves the installed package each time, uses loopback, and refuses to restart normal sessions', {skip:process.platform!=='win32'},async t=>{

@@ -10,6 +10,7 @@ $ShortcutPath = [IO.Path]::GetFullPath((Join-Path $ShortcutDirectory 'Codex EVA.
 $Launcher = Join-Path $PSScriptRoot 'launch.ps1'
 $IconPath = Join-Path $DataDirectory 'shortcut-codex.ico'
 $Receipt = Read-EvaReceipt $ReceiptPath
+$ClientArguments = '--remote-debugging-port=19327 --remote-debugging-address=127.0.0.1'
 
 function Get-Hash([string]$Path) {
   $Hasher = [Security.Cryptography.SHA256]::Create()
@@ -59,7 +60,18 @@ if ($Remove) {
   return
 }
 
+# Resolve before publishing anything. A missing installation must not produce a
+# shell shortcut or a shortcut to a missing program.
+. $Launcher
+$Executable = Resolve-CodexExecutable
+if ($null -ne $Receipt -and $Receipt.path -ne $ShortcutPath) {
+  throw 'SHORTCUT_LOCATION_CHANGED: 请先用 shortcut.ps1 -Remove 移除原入口，再选择新目录。'
+}
+if ($null -ne $Receipt -and $Receipt.phase -eq 'prepared' -and $Receipt.version -ne 2) {
+  throw 'SHORTCUT_REFRESH_REQUIRED: 旧版准备态不能恢复为脚本入口，请先运行 shortcut.ps1 -Remove 再重新创建。'
+}
 if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and $Receipt.phase -eq 'prepared' -and $Receipt.temporaryName -match '^shortcut-build-[a-f0-9]{32}\.lnk$') {
+  if ($Receipt.executable -ne $Executable) { throw 'SHORTCUT_REFRESH_REQUIRED: 官方客户端已更新，请先运行 shortcut.ps1 -Remove 再重新创建。' }
   $Unfinished = Join-Path $DataDirectory $Receipt.temporaryName
   if ($Receipt.temporaryDirectory -eq 'desktop') {
     $SourceLink = $Unfinished
@@ -83,6 +95,7 @@ if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and $Receipt.phase 
 }
 if (Test-Path -LiteralPath $ShortcutPath) {
   if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and (Get-Hash $ShortcutPath) -eq $Receipt.sha256) {
+    if ($Receipt.version -ne 2 -or $Receipt.executable -ne $Executable) { throw 'SHORTCUT_REFRESH_REQUIRED: 入口已过期，请先运行 shortcut.ps1 -Remove 再重新创建。' }
     if ($Receipt.phase -eq 'prepared') { $Receipt.phase = 'committed'; Write-ShortcutReceipt $Receipt }
     Write-Output 'SHORTCUT-OK: already installed'
     return
@@ -97,16 +110,14 @@ $TemporaryName = 'shortcut-build-' + [Guid]::NewGuid().ToString('N') + '.lnk'
 $TemporaryShortcut = Join-Path $DataDirectory $TemporaryName
 $PublicationShortcut = Join-Path $ShortcutDirectory $TemporaryName
 $Link = $Shell.CreateShortcut($TemporaryShortcut)
-$Link.TargetPath = Join-Path $PSHOME 'powershell.exe'
-$Link.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $Launcher
-$Link.WorkingDirectory = Split-Path -Parent $PSScriptRoot
-$Link.Description = '官方 Codex 客户端与 EVA 伴随程序；仅在本机开放调试端口。'
-$Link.WindowStyle = 7
+$Link.TargetPath = $Executable
+$Link.Arguments = $ClientArguments
+$Link.WorkingDirectory = Split-Path -Parent $Executable
+$Link.Description = '官方 Codex 客户端；本机调试端口 19327。EVA 伴随程序需单独运行。'
+$Link.WindowStyle = 1
 $CreatedIcon = $false
 $OwnedIconHash = $null
 try {
-  . $Launcher
-  $Executable = Resolve-CodexExecutable
   $Link.IconLocation = $Executable + ',0'
   if (-not (Test-Path -LiteralPath $IconPath)) {
     Add-Type -AssemblyName System.Drawing
@@ -129,7 +140,7 @@ $Prepared = $false
 $PublicationOwned = $false
 try {
   $Link.Save()
-  $NewReceipt = @{version = 1; phase = 'prepared'; path = $ShortcutPath; temporaryName = $TemporaryName; temporaryDirectory = 'desktop'; sha256 = (Get-Hash $TemporaryShortcut)}
+  $NewReceipt = @{version = 2; executable = $Executable; phase = 'prepared'; path = $ShortcutPath; temporaryName = $TemporaryName; temporaryDirectory = 'desktop'; sha256 = (Get-Hash $TemporaryShortcut)}
   if ($OwnedIconHash) { $NewReceipt.iconSha256 = $OwnedIconHash }
   Write-ShortcutReceipt $NewReceipt
   $Prepared = $true
