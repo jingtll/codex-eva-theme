@@ -438,3 +438,15 @@ test('each resumed connection receives a fresh media bridge', async t => {
   assert.equal(bridges.length,2);
   assert.equal(bridges[1].closed,false);
 });
+
+test('uninstall stop request shuts down even a paused companion and releases its lock', async t => {
+  const file=await settingsFile(t);
+  const instance=await startCompanion({settingsPath:file,findTarget:async()=>null,sendTray:()=>{},stopSounds,pollMs:60000});
+  t.after(()=>instance.stop());
+  await instance.pause();
+  await writeFile(`${file}.stop`, 'quit');
+  await waitFor(()=>instance.state==='stopped',{timeoutMs:1500});
+  await instance.stop();
+  await assert.rejects(readFile(`${file}.lock`),/ENOENT/);
+  await assert.rejects(readFile(`${file}.stop`),/ENOENT/);
+});

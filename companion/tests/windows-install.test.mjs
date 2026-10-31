@@ -51,7 +51,7 @@ async function setRegistryValue(value) {
     const escaped = value.replace(/'/g, "''");
     await runPowerShell(`New-Item -Path '${RUN_KEY}' -Force | Out-Null; Set-ItemProperty -Path '${RUN_KEY}' -Name '${runName}' -Value '${escaped}'`);
   } else {
-    await runPowerShell(`Remove-ItemProperty -Path '${RUN_KEY}' -Name '${runName}' -ErrorAction SilentlyContinue`);
+    await runPowerShell(`Remove-ItemProperty -Path '${RUN_KEY}' -Name '${runName}' -ErrorAction SilentlyContinue; exit 0`);
   }
 }
 
@@ -92,7 +92,8 @@ test('install records a receipt, a rerun is idempotent, and uninstall removes on
   assert.match(first.stdout, /REG-OK: command = /);
   const receipt = await readReceipt(home);
   assert.equal(receipt.registry.name, runName);
-  assert.match(receipt.registry.command, /node\.exe"? ".*main\.mjs"$/);
+  assert.match(receipt.registry.command, /-WindowStyle Hidden/);
+  assert.match(receipt.registry.command, /start\.ps1/);
   assert.equal(await registryValue(), receipt.registry.command);
 
   const second = await runInstall(home);
@@ -122,6 +123,23 @@ test('uninstall without a receipt touches nothing', async (t) => {
   assert.equal(observed, userEntry);
 });
 
+test('reinstall preserves a user change and uninstall restores the pre-install startup entry', async t => {
+  if (!(await hasRegistryWrite())) {t.skip('registry writes are blocked in this shell');return;}
+  const original=await registryValue();
+  const home=await mkdtemp(join(tmpdir(),'eva-install-restore-'));
+  t.after(async()=>{await setRegistryValue(original);await rm(home,{recursive:true,force:true});});
+  await setRegistryValue(userEntry);
+  await runInstall(home);
+  const receipt=await readReceipt(home);
+  assert.equal(receipt.registry.previousValue,userEntry);
+  await setRegistryValue('user modified after install');
+  await assert.rejects(runInstall(home),/REGISTRY_CONFLICT/);
+  assert.equal(await registryValue(),'user modified after install');
+  await setRegistryValue(receipt.registry.command);
+  await runInstall(home,uninstallScript);
+  assert.equal(await registryValue(),userEntry);
+});
+
 test('the migrated assets still match the hashes recorded in NOTICE', async () => {
   const notice = await readFile(join(companionRoot, 'NOTICE.md'), 'utf8');
   const rows = [...notice.matchAll(/\| `(assets\/[^`]+)` \|[^|]*\| `([a-f0-9]{64})` \|/g)];
@@ -130,4 +148,23 @@ test('the migrated assets still match the hashes recorded in NOTICE', async () =
     const bytes = await readFile(join(companionRoot, relativePath));
     assert.equal(createHash('sha256').update(bytes).digest('hex'), expected, basename(relativePath));
   }
+});
+
+test('uninstaller stops a running paused companion before removing its settings', async t => {
+  if (!(await hasRegistryWrite())) {t.skip('registry writes are blocked in this shell');return;}
+  const {startCompanion}=await import('../src/main.mjs');
+  const original=await registryValue();
+  const home=await mkdtemp(join(tmpdir(),'eva-uninstall-live-'));
+  t.after(async()=>{await setRegistryValue(original);await rm(home,{recursive:true,force:true});});
+  await runInstall(home);
+  const file=join(home,'AppData','Roaming','CodexEva','settings.json');
+  const runtime=await startCompanion({settingsPath:file,findTarget:async()=>null,sendTray:()=>{},stopSounds:async()=>{}});
+  t.after(()=>runtime.stop());
+  await runtime.updateSettings({volume:0.25});
+  await runtime.pause();
+  await runInstall(home,uninstallScript);
+  assert.equal(runtime.state,'stopped');
+  await runtime.stop();
+  await assert.rejects(readFile(file),/ENOENT/);
+  await assert.rejects(readFile(`${file}.lock`),/ENOENT/);
 });

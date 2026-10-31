@@ -4,7 +4,7 @@
 # starts the companion from this checkout and records a receipt of everything it
 # created so uninstall.ps1 can remove exactly that and nothing else.
 #
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 [-Install]
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File uninstall.ps1
 
 param(
@@ -47,30 +47,6 @@ function Read-Receipt {
   try { return Get-Content -LiteralPath $ReceiptPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
 }
 
-function ConvertTo-CommandLine([string]$Node, [string]$Script) {
-  # Quote each path so spaces in the installation directory survive the Run key.
-  return ('"{0}" "{1}"' -f $Node, $Script)
-}
-
-if (-not (Test-Path -LiteralPath $Entry -PathType Leaf)) {
-  Write-Error "未找到伴随程序入口：$Entry"
-  exit 3
-}
-
-$Node = Find-Node
-if (-not $Node) {
-  Write-Error '未找到 node.exe（需要 Node.js 22 或更高版本）。'
-  exit 4
-}
-
-$Version = (& $Node --version) -replace '^v', ''
-if ([version]($Version.Split('.')[0] + '.0') -lt [version]'22.0') {
-  Write-Error "Node.js 版本过低：$Version（需要 22 或更高版本）。"
-  exit 4
-}
-
-New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
-
 $Existing = Read-Receipt
 $ExistingValue = $null
 if ($null -ne $Existing -and $null -ne $Existing.registry) { $ExistingValue = [string]$Existing.registry.command }
@@ -79,6 +55,18 @@ if ($Uninstall) {
   if ($null -eq $Existing) {
     Write-Output 'REG-OK: no receipt'
     exit 0
+  }
+  $LockPath = Join-Path $DataDir 'settings.json.lock'
+  if (Test-Path -LiteralPath $LockPath -PathType Leaf) {
+    $OwnerId = 0
+    $LockStream = [IO.File]::Open($LockPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+    $LockReader = New-Object IO.StreamReader($LockStream)
+    try { [void][int]::TryParse($LockReader.ReadToEnd(), [ref]$OwnerId) } finally { $LockReader.Dispose() }
+    if ($OwnerId -gt 0 -and (Get-Process -Id $OwnerId -ErrorAction SilentlyContinue)) {
+      [IO.File]::WriteAllText((Join-Path $DataDir 'settings.json.stop'), 'quit')
+      for ($Attempt = 0; $Attempt -lt 100 -and (Test-Path -LiteralPath $LockPath); $Attempt++) { Start-Sleep -Milliseconds 100 }
+      if (Test-Path -LiteralPath $LockPath) { throw 'COMPANION_STOP_TIMEOUT: 伴随程序未退出，已保留安装内容。' }
+    } else { Remove-Item -LiteralPath $LockPath -Force }
   }
   $CurrentValue = $null
   try { $CurrentValue = (Get-ItemProperty -Path $RunKey -Name $RunName -ErrorAction Stop).$RunName } catch { }
@@ -89,8 +77,13 @@ if ($Uninstall) {
     # The user (or another tool) changed the entry: leave their value alone.
     Write-Output 'REG-OK: user value kept'
   } else {
-    Remove-ItemProperty -Path $RunKey -Name $RunName -ErrorAction SilentlyContinue
-    Write-Output 'REG-OK: removed'
+    if ($null -ne $Existing.registry.previousValue) {
+      Set-ItemProperty -Path $RunKey -Name $RunName -Value ([string]$Existing.registry.previousValue)
+      Write-Output 'REG-OK: previous value restored'
+    } else {
+      Remove-ItemProperty -Path $RunKey -Name $RunName -ErrorAction Stop
+      Write-Output 'REG-OK: removed'
+    }
   }
 
   $SettingsPath = Join-Path $DataDir 'settings.json'
@@ -106,9 +99,24 @@ if ($Uninstall) {
   exit 0
 }
 
-$Command = ConvertTo-CommandLine $Node $Entry
+if (-not (Test-Path -LiteralPath $Entry -PathType Leaf)) { throw '未找到伴随程序入口。' }
+$Node = Find-Node
+if (-not $Node) { throw '未找到 Node.js 22 或更高版本。' }
+$Version = (& $Node --version) -replace '^v', ''
+if ([int]$Version.Split('.')[0] -lt 22) { throw '需要 Node.js 22 或更高版本。' }
+New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+$StartScript = Join-Path $PSScriptRoot 'start.ps1'
+$PowerShell = Join-Path $PSHOME 'powershell.exe'
+$Command = '"{0}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}" -NodePath "{2}"' -f $PowerShell, $StartScript, $Node
+$CurrentValue = $null
+try { $CurrentValue = (Get-ItemProperty -Path $RunKey -Name $RunName -ErrorAction Stop).$RunName } catch { }
+$PreviousValue = $CurrentValue
+if ($null -ne $Existing) {
+  if ($null -ne $CurrentValue -and $CurrentValue -ne $ExistingValue) { throw 'REGISTRY_CONFLICT: 启动项已被修改，拒绝覆盖。' }
+  $PreviousValue = $Existing.registry.previousValue
+}
 
-if ($null -ne $Existing -and $null -ne $ExistingValue -and $ExistingValue -eq $Command) {
+if ($CurrentValue -eq $Command) {
   Write-Output 'REG-OK: already up to date'
 } else {
   if (-not (Test-Path -LiteralPath $RunKey)) {
@@ -127,10 +135,10 @@ $Receipt = [ordered]@{
   installedAt = (Get-Date).ToUniversalTime().ToString('o')
   companion   = $CompanionRoot
   node        = $Node
-  registry    = [ordered]@{ hive = 'HKCU'; key = 'Software\Microsoft\Windows\CurrentVersion\Run'; name = $RunName; command = $Command }
+  registry    = [ordered]@{ hive = 'HKCU'; key = 'Software\Microsoft\Windows\CurrentVersion\Run'; name = $RunName; command = $Command; previousValue = $PreviousValue }
 }
 # Windows PowerShell 5.1's "UTF8" writes a BOM; the companion parses the receipt
 # with JSON.parse, which rejects one, so write BOM-free UTF-8 explicitly.
 [System.IO.File]::WriteAllText($ReceiptPath, ($Receipt | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
 Write-Output "安装收据：$ReceiptPath"
-Write-Output '日常仍从原来的 Codex 图标启动；伴随程序会在托盘等待并自动接入。'
+Write-Output '伴随程序已注册自启；只有检测到本机调试入口及已验证版本后才会接入。'

@@ -1,4 +1,4 @@
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildBundle } from './bundle.mjs';
@@ -186,6 +186,7 @@ export async function startCompanion(options = {}) {
     trayChannel?.write(message);
   };
   let timer = null;
+  let stopTimer = null;
   let stopping = null;
   // Bumped by every tray or programmatic command so a pause/resume that lands
   // while a cycle is in flight keeps the newer intent.
@@ -313,6 +314,7 @@ export async function startCompanion(options = {}) {
     state = 'stopped';
     stopping = (async () => {
       clearTimeout(timer);
+      clearInterval(stopTimer);
       timer = null;
       sessionRef = null;
       await lifecycle.stop();
@@ -320,6 +322,7 @@ export async function startCompanion(options = {}) {
       trayChannel?.end();
       trayChannel = null;
       await exclusive.release();
+      await rm(`${settingsPath}.stop`, {force:true}).catch(()=>{});
       publish({ type: 'status', text: '已退出' });
     })();
     return stopping;
@@ -328,7 +331,13 @@ export async function startCompanion(options = {}) {
   const instance = {
     async start() {
       if (state !== 'starting') return instance;
+      await rm(`${settingsPath}.stop`, {force:true});
       state = 'running';
+      stopTimer = setInterval(() => {
+        readFile(`${settingsPath}.stop`, 'utf8').then(value => {
+          if (value === 'quit') instance.stop().catch(()=>{});
+        }).catch(()=>{});
+      }, 250);
       if (runScript && process.platform === 'win32') {
         trayChannel = openTrayChannel({ runScript, onAction: (line) => { handleTray(line).catch(() => {}); } });
       }
