@@ -62,11 +62,20 @@ test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前�
       assert.ok(Math.abs(layout.root.left-layout.main.left)<1,`overlay starts at visible workbench: ${label}`);
       assert.ok(layout.root.right<=layout.main.right+1,`overlay ends at workbench: ${label}`);
       assert.ok(layout.root.bottom<=layout.composer.top,`overlay leaves composer clear: ${label}`);
+      assert.ok(layout.portrait.width>layout.root.width*.3,`portrait uses the large reference composition: ${label}`);
+      assert.ok(layout.portrait.height>layout.root.height*.8 || layout.portrait.width>layout.root.width*.5,`portrait scales to available height or narrow width: ${label}`);
+      assert.ok(layout.geometry.width>layout.root.width*.4,`unit artwork stays large: ${label}`);
+      assert.ok(layout.geometry.left>layout.portrait.left+layout.portrait.width*.5,`unit artwork has a separate right anchor: ${label}`);
       for(const name of ['portrait','geometry','rail']){
         assert.ok(layout[name].left>=layout.root.left-1,`${name} stays after sidebar: ${label}`);
         assert.ok(layout[name].right<=layout.root.right+1,`${name} stays before side panel: ${label}`);
       }
       assert.equal(await harness.evaluate(hitTest('#visible-editor')),'hit',`input remains clickable: ${label}`);
+    }
+    for(const theme of ['light','dark']){
+      await harness.evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)};new Promise(r=>requestAnimationFrame(r))`);
+      assert.equal(await harness.evaluate(`${shadow('.geometry svg')}.getAttribute('viewBox')`),'0 0 600 600','original unit artwork retains its view box');
+      assert.match(await harness.evaluate(`${shadow('.geometry')}.textContent`),theme==='light'?/FIRST CHILD/:/SECOND CHILD/);
     }
     await harness.evaluate('window.__codexEva.dispose()');
     assert.equal(await harness.evaluate(`document.querySelector('${ROOT}')`),null);
