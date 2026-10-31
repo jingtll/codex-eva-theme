@@ -3,13 +3,13 @@
   [switch]$Remove
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'receipt.ps1')
 $DataDirectory = Join-Path $env:APPDATA 'CodexEva'
 $ReceiptPath = Join-Path $DataDirectory 'shortcut-receipt.json'
 $ShortcutPath = [IO.Path]::GetFullPath((Join-Path $ShortcutDirectory 'Codex EVA.lnk'))
 $Launcher = Join-Path $PSScriptRoot 'launch.ps1'
 $IconPath = Join-Path $DataDirectory 'shortcut-codex.ico'
-$Receipt = $null
-if (Test-Path -LiteralPath $ReceiptPath -PathType Leaf) { $Receipt = Get-Content -LiteralPath $ReceiptPath -Raw -Encoding UTF8 | ConvertFrom-Json }
+$Receipt = Read-EvaReceipt $ReceiptPath
 
 function Get-Hash([string]$Path) {
   $Hasher = [Security.Cryptography.SHA256]::Create()
@@ -18,20 +18,27 @@ function Get-Hash([string]$Path) {
 }
 
 function Write-ShortcutReceipt($Value) {
-  $Temporary = Join-Path $DataDirectory ('shortcut-receipt.' + [Guid]::NewGuid().ToString('N') + '.tmp')
-  try {
-    [IO.File]::WriteAllText($Temporary, ($Value | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
-    if (Test-Path -LiteralPath $ReceiptPath -PathType Leaf) { [IO.File]::Replace($Temporary, $ReceiptPath, ($Temporary + '.bak')) }
-    else { [IO.File]::Move($Temporary, $ReceiptPath) }
-  } finally {
-    foreach ($OwnedPath in @($Temporary, ($Temporary + '.bak'))) {
-      if (Test-Path -LiteralPath $OwnedPath -PathType Leaf) { Remove-Item -LiteralPath $OwnedPath -Force }
-    }
-  }
+  Write-EvaReceipt $ReceiptPath $Value
+}
+
+function Copy-LinkBytes([string]$Source, [string]$Destination) {
+  # AppData may use EFS. Copy bytes rather than inheriting its encryption metadata.
+  $Bytes = [IO.File]::ReadAllBytes($Source)
+  $Stream = [IO.File]::Open($Destination, [IO.FileMode]::CreateNew)
+  try { $Stream.Write($Bytes, 0, $Bytes.Length) } catch {
+    $Stream.Dispose()
+    Remove-Item -LiteralPath $Destination -Force
+    throw
+  } finally { $Stream.Dispose() }
 }
 
 if ($Remove) {
   if ($null -eq $Receipt) { return }
+  if ([IO.Path]::GetFileName($Receipt.path) -ne 'Codex EVA.lnk' -or -not [IO.Path]::IsPathRooted($Receipt.path)) { throw 'SHORTCUT_RECEIPT_INVALID' }
+  if (-not $PSBoundParameters.ContainsKey('ShortcutDirectory')) {
+    $ShortcutDirectory = [IO.Path]::GetDirectoryName($Receipt.path)
+    $ShortcutPath = [IO.Path]::GetFullPath($Receipt.path)
+  }
   if ($Receipt.path -ne $ShortcutPath) { throw 'SHORTCUT_LOCATION_CHANGED: 请使用原 ShortcutDirectory 卸载快捷方式。' }
   $KeepShortcut = $false
   if (Test-Path -LiteralPath $ShortcutPath -PathType Leaf) {
@@ -40,15 +47,26 @@ if ($Remove) {
   }
   if (-not $KeepShortcut -and $Receipt.iconSha256 -and (Test-Path -LiteralPath $IconPath -PathType Leaf) -and (Get-Hash $IconPath) -eq $Receipt.iconSha256) { Remove-Item -LiteralPath $IconPath -Force }
   if ($Receipt.temporaryName -match '^shortcut-build-[a-f0-9]{32}\.lnk$') {
-    $Unfinished = Join-Path $DataDirectory $Receipt.temporaryName
-    if ((Test-Path -LiteralPath $Unfinished -PathType Leaf) -and (Get-Hash $Unfinished) -eq $Receipt.sha256) { Remove-Item -LiteralPath $Unfinished -Force }
+    $StagingDirectories = @($DataDirectory)
+    if ($Receipt.temporaryDirectory -eq 'desktop') { $StagingDirectories += $ShortcutDirectory }
+    foreach ($StagingDirectory in $StagingDirectories) {
+      $Unfinished = Join-Path $StagingDirectory $Receipt.temporaryName
+      if ((Test-Path -LiteralPath $Unfinished -PathType Leaf) -and (Get-Hash $Unfinished) -eq $Receipt.sha256) { Remove-Item -LiteralPath $Unfinished -Force }
+    }
   }
   Remove-Item -LiteralPath $ReceiptPath -Force
+  Remove-Item -LiteralPath ($ReceiptPath + '.recovery') -Force -ErrorAction SilentlyContinue
   return
 }
 
 if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and $Receipt.phase -eq 'prepared' -and $Receipt.temporaryName -match '^shortcut-build-[a-f0-9]{32}\.lnk$') {
   $Unfinished = Join-Path $DataDirectory $Receipt.temporaryName
+  if ($Receipt.temporaryDirectory -eq 'desktop') {
+    $SourceLink = $Unfinished
+    $Unfinished = Join-Path $ShortcutDirectory $Receipt.temporaryName
+    if (-not (Test-Path -LiteralPath $Unfinished) -and (Test-Path -LiteralPath $SourceLink -PathType Leaf) -and (Get-Hash $SourceLink) -eq $Receipt.sha256) { Copy-LinkBytes $SourceLink $Unfinished }
+    if ((Test-Path -LiteralPath $SourceLink -PathType Leaf) -and (Get-Hash $SourceLink) -eq $Receipt.sha256) { Remove-Item -LiteralPath $SourceLink -Force }
+  }
   if ((Test-Path -LiteralPath $Unfinished -PathType Leaf) -and (Get-Hash $Unfinished) -eq $Receipt.sha256) {
     if (-not (Test-Path -LiteralPath $ShortcutPath)) {
       [IO.File]::Move($Unfinished, $ShortcutPath)
@@ -77,6 +95,7 @@ New-Item -ItemType Directory -Path $ShortcutDirectory -Force | Out-Null
 $Shell = New-Object -ComObject WScript.Shell
 $TemporaryName = 'shortcut-build-' + [Guid]::NewGuid().ToString('N') + '.lnk'
 $TemporaryShortcut = Join-Path $DataDirectory $TemporaryName
+$PublicationShortcut = Join-Path $ShortcutDirectory $TemporaryName
 $Link = $Shell.CreateShortcut($TemporaryShortcut)
 $Link.TargetPath = Join-Path $PSHOME 'powershell.exe'
 $Link.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $Launcher
@@ -107,14 +126,17 @@ try {
 }
 $Published = $false
 $Prepared = $false
+$PublicationOwned = $false
 try {
   $Link.Save()
-  $NewReceipt = @{version = 1; phase = 'prepared'; path = $ShortcutPath; temporaryName = $TemporaryName; sha256 = (Get-Hash $TemporaryShortcut)}
+  $NewReceipt = @{version = 1; phase = 'prepared'; path = $ShortcutPath; temporaryName = $TemporaryName; temporaryDirectory = 'desktop'; sha256 = (Get-Hash $TemporaryShortcut)}
   if ($OwnedIconHash) { $NewReceipt.iconSha256 = $OwnedIconHash }
   Write-ShortcutReceipt $NewReceipt
   $Prepared = $true
   # Move refuses an existing destination, including a shortcut created after preflight.
-  [IO.File]::Move($TemporaryShortcut, $ShortcutPath)
+  Copy-LinkBytes $TemporaryShortcut $PublicationShortcut
+  $PublicationOwned = $true
+  [IO.File]::Move($PublicationShortcut, $ShortcutPath)
   $Published = $true
   $NewReceipt.phase = 'committed'
   Write-ShortcutReceipt $NewReceipt
@@ -128,5 +150,6 @@ try {
   throw
 } finally {
   if (Test-Path -LiteralPath $TemporaryShortcut -PathType Leaf) { Remove-Item -LiteralPath $TemporaryShortcut -Force }
+  if ($PublicationOwned -and (Test-Path -LiteralPath $PublicationShortcut -PathType Leaf) -and (Get-Hash $PublicationShortcut) -eq $NewReceipt.sha256) { Remove-Item -LiteralPath $PublicationShortcut -Force }
 }
 Write-Output 'SHORTCUT-OK: created'

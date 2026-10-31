@@ -9,10 +9,12 @@
 
 param(
   [switch]$Uninstall,
-  [switch]$CreateShortcut
+  [switch]$CreateShortcut,
+  [string]$ShortcutDirectory
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'receipt.ps1')
 
 if ($PSVersionTable.PSVersion.Major -ge 7) {
   Write-Error '请使用 Windows PowerShell 5.1 运行安装脚本。'
@@ -44,21 +46,11 @@ function Find-Node {
 }
 
 function Read-Receipt {
-  if (-not (Test-Path -LiteralPath $ReceiptPath -PathType Leaf)) { return $null }
-  try { return Get-Content -LiteralPath $ReceiptPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
+  return Read-EvaReceipt $ReceiptPath
 }
 
 function Write-ReceiptAtomically($Value) {
-  $Temporary = Join-Path $DataDir ('install-receipt.' + [Guid]::NewGuid().ToString('N') + '.tmp')
-  try {
-    [IO.File]::WriteAllText($Temporary, ($Value | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
-    if (Test-Path -LiteralPath $ReceiptPath -PathType Leaf) { [IO.File]::Replace($Temporary, $ReceiptPath, ($Temporary + '.bak')) }
-    else { [IO.File]::Move($Temporary, $ReceiptPath) }
-  } finally {
-    foreach ($OwnedTemporary in @($Temporary, ($Temporary + '.bak'))) {
-      if (Test-Path -LiteralPath $OwnedTemporary -PathType Leaf) { Remove-Item -LiteralPath $OwnedTemporary -Force }
-    }
-  }
+  Write-EvaReceipt $ReceiptPath $Value
 }
 
 $Existing = Read-Receipt
@@ -108,6 +100,7 @@ if ($Uninstall) {
     Write-Output '已移除皮肤偏好设置。'
   }
   Remove-Item -LiteralPath $ReceiptPath -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath ($ReceiptPath + '.recovery') -Force -ErrorAction SilentlyContinue
   if ((Get-ChildItem -LiteralPath $DataDir -Force | Measure-Object).Count -eq 0) {
     Remove-Item -LiteralPath $DataDir -Force -ErrorAction SilentlyContinue
   }
@@ -168,7 +161,8 @@ try {
     Write-Output "REG-OK: command = $Command"
   }
   if ($CreateShortcut) {
-    $ShortcutResult = @(& (Join-Path $PSScriptRoot 'shortcut.ps1'))
+    if ($ShortcutDirectory) { $ShortcutResult = @(& (Join-Path $PSScriptRoot 'shortcut.ps1') -ShortcutDirectory $ShortcutDirectory) }
+    else { $ShortcutResult = @(& (Join-Path $PSScriptRoot 'shortcut.ps1')) }
     $CreatedShortcut = $ShortcutResult -contains 'SHORTCUT-OK: created'
     $ShortcutResult | Write-Output
   }
@@ -185,7 +179,7 @@ try {
   else { Remove-Item -LiteralPath $ReceiptPath -Force }
   if ($CreatedShortcut) {
     & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove
-    if ($null -ne $PriorShortcutReceipt) { [IO.File]::WriteAllBytes($ShortcutReceiptPath, $PriorShortcutReceipt) }
+    if ($null -ne $PriorShortcutReceipt) { Write-EvaReceipt $ShortcutReceiptPath ([Text.Encoding]::UTF8.GetString($PriorShortcutReceipt) | ConvertFrom-Json) }
     if ($null -ne $PriorShortcutIcon -and -not (Test-Path -LiteralPath $ShortcutIconPath)) { [IO.File]::WriteAllBytes($ShortcutIconPath, $PriorShortcutIcon) }
   }
   throw

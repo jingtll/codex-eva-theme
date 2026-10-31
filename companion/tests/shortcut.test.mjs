@@ -28,6 +28,9 @@ test('desktop shortcut is repeatable and removal preserves a user-modified short
   await run([]);
   await run(['-Remove']);
   await assert.rejects(readFile(link),/ENOENT/);
+  await run([]);
+  await execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',script,'-Remove'],{env:{...process.env,APPDATA:appdata}});
+  await assert.rejects(readFile(link),/ENOENT/);
 });
 
 test('launcher resolves the installed package each time, uses loopback, and refuses to restart normal sessions', {skip:process.platform!=='win32'},async t=>{

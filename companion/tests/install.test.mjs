@@ -15,6 +15,7 @@ const scriptPaths = [
   join(companionRoot, 'windows', 'start.ps1'),
   join(companionRoot, 'windows', 'launch.ps1'),
   join(companionRoot, 'windows', 'shortcut.ps1'),
+  join(companionRoot, 'windows', 'receipt.ps1'),
 ];
 
 test('file receipts contain only installation-relative paths and content hashes', async (t) => {
