@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { discoverCodexAsar, isCodexTarget } from '../src/discovery.mjs';
+import { discoverCodexAsar, findCodexTarget, isCodexTarget } from '../src/discovery.mjs';
 
 const MAIN_ORIGIN = 'app://-';
 
@@ -97,4 +97,41 @@ test('reports absence of a running process and rejects ambiguous active installa
   });
   assert.equal(ambiguous.status, 'ambiguous');
   assert.equal(ambiguous.candidateCount, 2);
+});
+
+const listResponse = (targets) => ({ ok: true, json: async () => targets });
+const TARGET = {
+  id: 'main', type: 'page', url: 'app://-/index.html',
+  webSocketDebuggerUrl: 'ws://127.0.0.1:19327/devtools/page/main',
+};
+
+test('selects only the confirmed main page over a loopback debugging socket', async () => {
+  const requested = [];
+  const result = await findCodexTarget({
+    port: 19327,
+    fetchImpl: async (url) => { requested.push(url); return listResponse([
+      { id: 'login', type: 'page', url: 'https://chatgpt.com/auth/login', webSocketDebuggerUrl: 'ws://127.0.0.1:19327/devtools/page/login' },
+      { id: 'plugin', type: 'iframe', url: 'app://-/index.html', webSocketDebuggerUrl: 'ws://127.0.0.1:19327/devtools/page/plugin' },
+      TARGET,
+    ]); },
+  });
+  assert.deepEqual(requested, ['http://127.0.0.1:19327/json/list']);
+  assert.equal(result.status, 'found');
+  assert.equal(result.id, 'main');
+  assert.equal(result.webSocketDebuggerUrl, TARGET.webSocketDebuggerUrl);
+});
+
+test('rejects a main page whose debugger socket is not loopback', async () => {
+  const result = await findCodexTarget({
+    port: 19327,
+    fetchImpl: async () => listResponse([{ ...TARGET, webSocketDebuggerUrl: 'ws://10.0.0.5:19327/devtools/page/main' }]),
+  });
+  assert.equal(result.status, 'target_not_found');
+});
+
+test('reports an unreachable endpoint without throwing and ignores invalid ports', async () => {
+  const unreachable = await findCodexTarget({ port: 19327, fetchImpl: async () => { throw new Error('ECONNREFUSED'); } });
+  assert.equal(unreachable.status, 'endpoint_unavailable');
+  assert.equal((await findCodexTarget({ port: 0 })).status, 'port_not_configured');
+  assert.equal((await findCodexTarget()).status, 'port_not_configured');
 });

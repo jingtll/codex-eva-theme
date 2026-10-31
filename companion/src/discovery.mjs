@@ -34,10 +34,15 @@ async function fileExists(filePath) {
   }
 }
 
-async function readRunningCodexProcesses() {
+const CODEX_PROCESS_NAME = 'ChatGPT.exe';
+const PROCESS_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.exe$/;
+
+async function readRunningCodexProcesses(nameFilter = CODEX_PROCESS_NAME) {
+  // The filter is a fixed host process name, never caller text, and is re-validated here.
+  if (!PROCESS_NAME_PATTERN.test(nameFilter)) throw new Error('DISCOVERY_PROCESS_NAME_INVALID');
   // Only derived fields leave PowerShell. The full process command line is never returned.
   const script = String.raw`
-$items = @(Get-CimInstance Win32_Process -Filter "Name='ChatGPT.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+$items = @(Get-CimInstance Win32_Process -Filter "Name='${nameFilter}'" -ErrorAction SilentlyContinue | ForEach-Object {
   $fileVersion = $null
   try { $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($_.ExecutablePath).FileVersion } catch {}
   $debugPort = $null
@@ -163,5 +168,47 @@ export function isCodexTarget(target, expectedOrigin) {
       actual.pathname === mainPagePath(expected);
   } catch {
     return false;
+  }
+}
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]']);
+
+function isLoopbackEndpoint(endpoint) {
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === 'ws:' && LOOPBACK_HOSTS.has(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads the local debugging endpoint of a running Codex instance and returns
+ * only the confirmed main page target. Never broadens to browsers, login pages
+ * or plugin iframes. Returns a status instead of throwing on unreachable ports.
+ */
+export async function findCodexTarget({ port, expectedOrigin = 'app://-', timeoutMs = 800, fetchImpl = fetch } = {}) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return { status: 'port_not_configured' };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(`http://127.0.0.1:${port}/json/list`, {
+      signal: controller.signal,
+      redirect: 'manual',
+    });
+    if (!response.ok) return { status: 'endpoint_unavailable' };
+    const targets = await response.json();
+    if (!Array.isArray(targets)) return { status: 'endpoint_unrecognized' };
+    const match = targets.find((target) =>
+      isCodexTarget(target, expectedOrigin) &&
+      typeof target.webSocketDebuggerUrl === 'string' &&
+      isLoopbackEndpoint(target.webSocketDebuggerUrl));
+    return match
+      ? { status: 'found', port, id: match.id, url: match.url, webSocketDebuggerUrl: match.webSocketDebuggerUrl }
+      : { status: 'target_not_found' };
+  } catch {
+    return { status: 'endpoint_unavailable' };
+  } finally {
+    clearTimeout(timer);
   }
 }
