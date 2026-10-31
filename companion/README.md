@@ -2,7 +2,7 @@
 
 给 Codex 工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
 
-**前提**：当前 Codex 版本的普通启动不带调试端口，伴随程序接不上。你需要用带调试端口的方式启动 Codex（见下文「启动 Codex」），日常仍可从原图标启动 Codex，但那样不会有皮肤。这一点在验证出更好的接入方式前不会改变，详见 `docs/validation/acceptance.md`「已知阻碍」。
+当前使用新增的 **Codex EVA** 快捷方式启动官方客户端及伴随程序。原 MSIX 图标保留，普通启动不带调试端口，因此没有皮肤。首次使用前请先保存工作并完全退出正在普通模式运行的 Codex；启动器会提示这一点，不会替你关闭聊天。
 
 启动 Codex 后，伴随程序开机驻留托盘，检测到本机调试端点就接入；没有就显示「等待 Codex 调试入口」。
 
@@ -13,6 +13,18 @@
 - Windows PowerShell 5.1（安装与托盘用；PowerShell 7 不支持 WinRT 媒体桥的写法）
 
 ## 启动 Codex
+
+在仓库根目录运行一次安装（Windows PowerShell 5.1）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion"
+```
+
+之后打开 `companion\Codex EVA.lnk`。启动器每次通过当前用户的 MSIX 包定位安装路径，不固定版本目录；自有图标缓存避免图标依赖旧安装目录。快捷方式和图标记录哈希，重复安装不覆盖用户修改，卸载从收据读取原目录并清理。
+
+不指定 `-ShortcutDirectory` 时默认生成到桌面。本机实测桌面入口创建后约 3 秒会被未知外部机制移除，因此实际安装在项目目录；该入口已跨多次调用验证持续存在。尚未找到桌面移除来源，没有更改安全设置。
+
+仅创建或移除快捷方式、不修改开机启动项时，分别运行 `companion\windows\shortcut.ps1` 或加 `-Remove`。新快捷方式会自行启动伴随程序。
 
 用带调试参数的方式启动（需先完全退出已运行的 Codex）：
 
@@ -86,7 +98,7 @@ $env:EVA_BROWSER_ENDPOINT="http://127.0.0.1:19433"; npm run test:browser
 
 端点就绪后运行 `npm run test:browser`，包含主题布局、额度 adapter，以及使用真实主循环/会话/bundle 的连接、刷新、暂停恢复与清理回归。`npm test` 不包含浏览器测试。
 
-静态测试、隔离浏览器测试与真实客户端验收是三类结果，不能互相替代。真实验收记录见 `docs/validation/acceptance.md`。原 MSIX 图标自动接入尚未实现，当前没有创建替代快捷方式。
+静态测试、隔离浏览器测试与真实客户端验收是三类结果，不能互相替代。真实验收记录见 `docs/validation/acceptance.md`。用户已接受新增快捷方式；原 MSIX 入口保持原样。
 
 ## 结构
 
