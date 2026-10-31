@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<meta charset="utf-8">
+<title>工作台边界回归</title>
+<style>
+html,body{margin:0;height:100%;font:14px sans-serif}body{display:flex;flex-direction:column}header{height:44px;flex:none}
+.app{display:flex;flex:1;min-height:0}.sidebar{width:380px;flex:none;background:#eee}
+main{flex:1;min-width:0;display:flex;flex-direction:column}.conversation{flex:1;min-height:0;overflow:auto;padding:24px}
+form{width:min(760px,calc(100% - 32px));margin:0 auto 16px;flex:none} [contenteditable]{min-height:80px;border:1px solid #888;padding:12px;box-sizing:border-box}
+.aux{width:300px;flex:none;background:#ddd}[hidden]{display:none!important}@media(max-width:1000px){.sidebar{width:200px}}
+</style>
+<header>宿主工具栏</header>
+<main hidden><div contenteditable="true">隐藏的旧输入框</div></main>
+<div class="app"><nav class="sidebar">聊天列表</nav><main id="active-workbench"><section class="conversation">当前工作台</section><form><div id="visible-editor" contenteditable="true" role="textbox">输入消息</div><button id="send" type="button">发送</button></form></main><aside class="aux" hidden>右侧内容面板</aside></div>
+</html>

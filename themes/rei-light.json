@@ -1,0 +1,16 @@
+{
+  "accent": "#176b91",
+  "contrast": 45,
+  "fonts": {
+    "code": null,
+    "ui": null
+  },
+  "ink": "#203849",
+  "opaqueWindows": false,
+  "semanticColors": {
+    "diffAdded": "#267263",
+    "diffRemoved": "#ad3d57",
+    "skill": "#926008"
+  },
+  "surface": "#eff6fa"
+}

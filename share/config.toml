@@ -1,0 +1,39 @@
+# Codex EVA 主题 —— 配置片段
+#
+# 生成自 themes/*.json，不要手改。改色请改主题文件后跑 npm run build。
+#
+# 用法：把下面的表追加到 ~/.codex/config.toml 末尾，然后重启 Codex。
+# 更稳的路径是 share/share-*.txt：在「设置 → 外观」里粘贴导入，可一键还原。
+#
+# 注意：appearance* 这几张表的 TOML 路径来自宿主设置键推导（[desktop] 段），
+# 尚未在本机做视觉验收。若重启后外观没变，请改用分享串导入，并到
+# docs/theme-tokens.md「生效路径」一节记录结果。
+# ── 02 · 明日香 / ASUKA LANGLEY · dark ──
+[desktop.appearanceDarkChromeTheme]
+accent = "#ff354d"
+contrast = 55
+ink = "#fff1e7"
+opaqueWindows = false
+surface = "#0d0f13"
+
+[desktop.appearanceDarkChromeTheme.semanticColors]
+diffAdded = "#8dc358"
+diffRemoved = "#ff8494"
+skill = "#e5a24f"
+
+# fonts 未设置：沿用 Codex 默认字体（见 docs/theme-tokens.md 的字体一节）
+
+# ── 00 · 绫波丽 / REI AYANAMI · light ──
+[desktop.appearanceLightChromeTheme]
+accent = "#176b91"
+contrast = 45
+ink = "#203849"
+opaqueWindows = false
+surface = "#eff6fa"
+
+[desktop.appearanceLightChromeTheme.semanticColors]
+diffAdded = "#267263"
+diffRemoved = "#ad3d57"
+skill = "#926008"
+
+# fonts 未设置：沿用 Codex 默认字体（见 docs/theme-tokens.md 的字体一节）
