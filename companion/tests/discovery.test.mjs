@@ -151,3 +151,10 @@ test('keeps a valid visible workbench stable and ignores failed auxiliary probes
     inspectTarget:async target=>{if(target.id==='failed')throw Error('gone');return {workbench:true,visible:true,focused:false};}});
   assert.equal(result.id,'current');
 });
+
+test('a transient current-page probe failure does not move the theme to a hidden page',async()=>{
+  const targets=['hidden','current'].map(id=>({...TARGET,id}));
+  const result=await findCodexTarget({port:19327,preferredTargetId:'current',fetchImpl:async()=>listResponse(targets),
+    inspectTarget:async target=>{if(target.id==='current')throw Error('temporary timeout');return {workbench:true,visible:false,focused:false};}});
+  assert.equal(result.id,'current');
+});

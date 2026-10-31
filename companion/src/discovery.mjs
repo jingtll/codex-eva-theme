@@ -226,11 +226,13 @@ export async function findCodexTarget({ port, expectedOrigin = 'app://-', timeou
       const workbenches = inspected.filter(item => item.view?.workbench);
       const visible = workbenches.filter(item => item.view.visible);
       const eligible = visible.length ? visible : workbenches;
-      match = (eligible.find(item => item.view.visible && item.view.focused) ||
+      const uncertainCurrent = inspected.find(item => !item.view && item.target.id === preferredTargetId);
+      // Without a confirmed visible replacement, a hidden page must not steal
+      // the theme merely because the current page missed one probe deadline.
+      match = (!visible.length && uncertainCurrent ||
+        eligible.find(item => item.view.visible && item.view.focused) ||
         eligible.find(item => item.target.id === preferredTargetId) ||
         eligible.sort((a,b) => a.target.id.localeCompare(b.target.id))[0])?.target;
-      // A momentarily unresponsive current renderer is not proof it vanished.
-      if (!match) match = inspected.find(item => !item.view && item.target.id === preferredTargetId)?.target;
     }
     return match
       ? { status: 'found', port, id: match.id, url: match.url, webSocketDebuggerUrl: match.webSocketDebuggerUrl }
