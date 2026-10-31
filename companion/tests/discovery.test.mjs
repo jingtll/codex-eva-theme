@@ -135,3 +135,19 @@ test('reports an unreachable endpoint without throwing and ignores invalid ports
   assert.equal((await findCodexTarget({ port: 0 })).status, 'port_not_configured');
   assert.equal((await findCodexTarget()).status, 'port_not_configured');
 });
+
+test('visible workbench wins over a hidden renderer regardless of target order', async () => {
+  const hidden={...TARGET,id:'hidden'}, visible={...TARGET,id:'visible'}, settings={...TARGET,id:'settings'};
+  for(const targets of [[hidden,settings,visible],[visible,hidden,settings]]){
+    const result=await findCodexTarget({port:19327,preferredTargetId:'hidden',fetchImpl:async()=>listResponse(targets),
+      inspectTarget:async target=>({workbench:target.id!=='settings',visible:target.id!=='hidden',focused:target.id==='settings'})});
+    assert.equal(result.id,'visible','the user-visible chat retains its theme instead of the hidden page');
+  }
+});
+
+test('keeps a valid visible workbench stable and ignores failed auxiliary probes', async()=>{
+  const targets=['other','current','failed'].map(id=>({...TARGET,id}));
+  const result=await findCodexTarget({port:19327,preferredTargetId:'current',fetchImpl:async()=>listResponse(targets),
+    inspectTarget:async target=>{if(target.id==='failed')throw Error('gone');return {workbench:true,visible:true,focused:false};}});
+  assert.equal(result.id,'current');
+});

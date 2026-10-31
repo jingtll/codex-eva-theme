@@ -1,6 +1,7 @@
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { stat } from 'node:fs/promises';
+import { connectCdp } from './cdp.mjs';
 import path from 'node:path';
 
 const execFile = promisify(execFileCallback);
@@ -187,7 +188,20 @@ function isLoopbackEndpoint(endpoint) {
  * only the confirmed main page target. Never broadens to browsers, login pages
  * or plugin iframes. Returns a status instead of throwing on unreachable ports.
  */
-export async function findCodexTarget({ port, expectedOrigin = 'app://-', timeoutMs = 800, fetchImpl = fetch } = {}) {
+export async function inspectWorkbenchTarget(target, { timeoutMs = 800 } = {}) {
+  const cdp = await connectCdp(target.webSocketDebuggerUrl, { timeoutMs });
+  try {
+    // Only layout/capability booleans leave the page, never chat text or titles.
+    const result = await cdp.send('Runtime.evaluate', { expression: `({
+      workbench:!!window.electronBridge&&[...document.querySelectorAll('[contenteditable="true"],textarea[placeholder]')].some(e=>{const b=e.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(e).visibility!=='hidden'}),
+      visible:document.visibilityState==='visible',focused:document.hasFocus()
+    })`, returnByValue: true });
+    if (result.exceptionDetails || !result.result?.value) throw new Error('TARGET_INSPECTION_FAILED');
+    return result.result.value;
+  } finally { cdp.close(); }
+}
+
+export async function findCodexTarget({ port, expectedOrigin = 'app://-', timeoutMs = 800, fetchImpl = fetch, preferredTargetId = null, inspectTarget = inspectWorkbenchTarget } = {}) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { status: 'port_not_configured' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -199,10 +213,25 @@ export async function findCodexTarget({ port, expectedOrigin = 'app://-', timeou
     if (!response.ok) return { status: 'endpoint_unavailable' };
     const targets = await response.json();
     if (!Array.isArray(targets)) return { status: 'endpoint_unrecognized' };
-    const match = targets.find((target) =>
+    const candidates = targets.filter((target) =>
       isCodexTarget(target, expectedOrigin) &&
       typeof target.webSocketDebuggerUrl === 'string' &&
       isLoopbackEndpoint(target.webSocketDebuggerUrl));
+    let match = candidates[0];
+    if (candidates.length > 1) {
+      const inspected = await Promise.all(candidates.map(async target => {
+        try { return {target, view:await inspectTarget(target,{timeoutMs})}; }
+        catch { return {target, view:null}; }
+      }));
+      const workbenches = inspected.filter(item => item.view?.workbench);
+      const visible = workbenches.filter(item => item.view.visible);
+      const eligible = visible.length ? visible : workbenches;
+      match = (eligible.find(item => item.view.visible && item.view.focused) ||
+        eligible.find(item => item.target.id === preferredTargetId) ||
+        eligible.sort((a,b) => a.target.id.localeCompare(b.target.id))[0])?.target;
+      // A momentarily unresponsive current renderer is not proof it vanished.
+      if (!match) match = inspected.find(item => !item.view && item.target.id === preferredTargetId)?.target;
+    }
     return match
       ? { status: 'found', port, id: match.id, url: match.url, webSocketDebuggerUrl: match.webSocketDebuggerUrl }
       : { status: 'target_not_found' };

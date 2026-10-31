@@ -180,6 +180,7 @@ export async function startCompanion(options = {}) {
 
   let state = 'starting';
   let sessionRef = null;
+  let preferredTargetId = null;
   let trayChannel = null;
   const send = (message) => {
     if (sendTray) { try { sendTray(message); } catch { /* A closed tray must not break the companion. */ } return; }
@@ -211,7 +212,7 @@ export async function startCompanion(options = {}) {
         installation = await discover();
         port = installation.remoteDebuggingPort;
       }
-      const result = port ? await findTarget({ port }) : await findTarget();
+      const result = port ? await findTarget({ port, preferredTargetId }) : await findTarget({ preferredTargetId });
       // discovery returns a status record; tests may inject a bare target.
       if (result && typeof result.webSocketDebuggerUrl === 'string' && result.status !== 'endpoint_unavailable') return result;
       return null;
@@ -234,6 +235,7 @@ export async function startCompanion(options = {}) {
         onStatus: (text) => publish({ type: 'status', text }),
       }); } catch (error) { media.close(); throw error; }
       sessionRef = session;
+      preferredTargetId = target.id;
       return {
         tick: () => session.tick?.(),
         openSettings: () => session.openSettings?.(),
