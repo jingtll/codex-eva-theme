@@ -9,8 +9,25 @@ function Resolve-CodexExecutable {
   return $Executable
 }
 
+function Resolve-CodexLaunchAlias {
+  $Packages = @(Get-AppxPackage -Name OpenAI.Codex -ErrorAction Stop)
+  if ($Packages.Count -ne 1) { throw 'CODEX_INSTALL_NOT_UNIQUE: 未找到唯一的官方 Codex 安装。' }
+  $Manifest = Get-AppxPackageManifest -Package $Packages[0].PackageFullName -ErrorAction Stop
+  $Applications = @($Manifest.SelectNodes("//*[local-name()='Application' and @Id='App']"))
+  if ($Applications.Count -ne 1 -or $Applications[0].GetAttribute('Executable').Replace('/', '\') -ine 'app\ChatGPT.exe') {
+    throw 'CODEX_ALIAS_REGISTRATION_CHANGED: 官方主入口已变化，需要重新验证。'
+  }
+  $Aliases = @($Applications[0].SelectNodes(".//*[local-name()='ExecutionAlias']") | Where-Object { $_.GetAttribute('Alias') -eq 'chatgpt-desktop.exe' })
+  $AliasPath = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\chatgpt-desktop.exe'
+  if ($Aliases.Count -ne 1 -or -not (Test-Path -LiteralPath $AliasPath -PathType Leaf)) {
+    throw 'CODEX_ALIAS_UNAVAILABLE: 请在 Windows 应用执行别名设置中启用 chatgpt-desktop.exe，或修复官方安装。'
+  }
+  return $AliasPath
+}
+
 function Start-EvaCodex {
   $Executable = Resolve-CodexExecutable
+  $LaunchAlias = Resolve-CodexLaunchAlias
   $MainProcesses = @(Get-CimInstance Win32_Process -Filter "Name='ChatGPT.exe'" -ErrorAction Stop | Where-Object {
     $_.ExecutablePath -eq $Executable -and $_.CommandLine -notmatch '(?:^|\s)--type='
   })
@@ -21,8 +38,8 @@ function Start-EvaCodex {
   }
   $Node = (Get-Command node.exe -ErrorAction Stop).Source
   & (Join-Path $PSScriptRoot 'start.ps1') -NodePath $Node
-  # Resolve the current package on every launch; never pin a versioned WindowsApps path.
-  Start-Process -FilePath $Executable -ArgumentList @("--remote-debugging-port=$DebugPort", '--remote-debugging-address=127.0.0.1')
+  # The registered alias preserves package identity; the package's raw exe does not.
+  Start-Process -FilePath $LaunchAlias -ArgumentList @("--remote-debugging-port=$DebugPort", '--remote-debugging-address=127.0.0.1')
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

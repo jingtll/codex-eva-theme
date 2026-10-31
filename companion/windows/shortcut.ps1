@@ -64,14 +64,15 @@ if ($Remove) {
 # shell shortcut or a shortcut to a missing program.
 . $Launcher
 $Executable = Resolve-CodexExecutable
+$LaunchAlias = Resolve-CodexLaunchAlias
 if ($null -ne $Receipt -and $Receipt.path -ne $ShortcutPath) {
   throw 'SHORTCUT_LOCATION_CHANGED: 请先用 shortcut.ps1 -Remove 移除原入口，再选择新目录。'
 }
-if ($null -ne $Receipt -and $Receipt.phase -eq 'prepared' -and $Receipt.version -ne 2) {
-  throw 'SHORTCUT_REFRESH_REQUIRED: 旧版准备态不能恢复为脚本入口，请先运行 shortcut.ps1 -Remove 再重新创建。'
+if ($null -ne $Receipt -and $Receipt.phase -eq 'prepared' -and $Receipt.version -ne 3) {
+  throw 'SHORTCUT_REFRESH_REQUIRED: 旧版准备态不能恢复为无包身份入口，请先运行 shortcut.ps1 -Remove 再重新创建。'
 }
 if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and $Receipt.phase -eq 'prepared' -and $Receipt.temporaryName -match '^shortcut-build-[a-f0-9]{32}\.lnk$') {
-  if ($Receipt.executable -ne $Executable) { throw 'SHORTCUT_REFRESH_REQUIRED: 官方客户端已更新，请先运行 shortcut.ps1 -Remove 再重新创建。' }
+  if ($Receipt.aliasPath -ne $LaunchAlias) { throw 'SHORTCUT_REFRESH_REQUIRED: 官方启动别名已变化，请先运行 shortcut.ps1 -Remove 再重新创建。' }
   $Unfinished = Join-Path $DataDirectory $Receipt.temporaryName
   if ($Receipt.temporaryDirectory -eq 'desktop') {
     $SourceLink = $Unfinished
@@ -95,7 +96,7 @@ if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and $Receipt.phase 
 }
 if (Test-Path -LiteralPath $ShortcutPath) {
   if ($null -ne $Receipt -and $Receipt.path -eq $ShortcutPath -and (Get-Hash $ShortcutPath) -eq $Receipt.sha256) {
-    if ($Receipt.version -ne 2 -or $Receipt.executable -ne $Executable) { throw 'SHORTCUT_REFRESH_REQUIRED: 入口已过期，请先运行 shortcut.ps1 -Remove 再重新创建。' }
+    if ($Receipt.version -ne 3 -or $Receipt.aliasPath -ne $LaunchAlias) { throw 'SHORTCUT_REFRESH_REQUIRED: 入口已过期，请先运行 shortcut.ps1 -Remove 再重新创建。' }
     if ($Receipt.phase -eq 'prepared') { $Receipt.phase = 'committed'; Write-ShortcutReceipt $Receipt }
     Write-Output 'SHORTCUT-OK: already installed'
     return
@@ -110,10 +111,10 @@ $TemporaryName = 'shortcut-build-' + [Guid]::NewGuid().ToString('N') + '.lnk'
 $TemporaryShortcut = Join-Path $DataDirectory $TemporaryName
 $PublicationShortcut = Join-Path $ShortcutDirectory $TemporaryName
 $Link = $Shell.CreateShortcut($TemporaryShortcut)
-$Link.TargetPath = $Executable
+$Link.TargetPath = $LaunchAlias
 $Link.Arguments = $ClientArguments
-$Link.WorkingDirectory = Split-Path -Parent $Executable
-$Link.Description = '官方 Codex 客户端；本机调试端口 19327。EVA 伴随程序需单独运行。'
+$Link.WorkingDirectory = Split-Path -Parent $LaunchAlias
+$Link.Description = '官方 Codex MSIX 入口；本机调试端口 19327。EVA 伴随程序需单独运行。'
 $Link.WindowStyle = 1
 $CreatedIcon = $false
 $OwnedIconHash = $null
@@ -140,7 +141,7 @@ $Prepared = $false
 $PublicationOwned = $false
 try {
   $Link.Save()
-  $NewReceipt = @{version = 2; executable = $Executable; phase = 'prepared'; path = $ShortcutPath; temporaryName = $TemporaryName; temporaryDirectory = 'desktop'; sha256 = (Get-Hash $TemporaryShortcut)}
+  $NewReceipt = @{version = 3; aliasPath = $LaunchAlias; executable = $Executable; phase = 'prepared'; path = $ShortcutPath; temporaryName = $TemporaryName; temporaryDirectory = 'desktop'; sha256 = (Get-Hash $TemporaryShortcut)}
   if ($OwnedIconHash) { $NewReceipt.iconSha256 = $OwnedIconHash }
   Write-ShortcutReceipt $NewReceipt
   $Prepared = $true

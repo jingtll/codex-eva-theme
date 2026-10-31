@@ -20,7 +20,7 @@ test('desktop shortcut is repeatable and removal preserves a user-modified short
   const inspected=await execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',`
     $link=(New-Object -ComObject WScript.Shell).CreateShortcut($env:EVA_TEST_LINK)
     $package=Get-AppxPackage -Name OpenAI.Codex
-    @{target=$link.TargetPath;expected=(Join-Path $package.InstallLocation 'app\\ChatGPT.exe');arguments=$link.Arguments;style=$link.WindowStyle} | ConvertTo-Json -Compress
+    @{target=$link.TargetPath;expected=(Join-Path $env:LOCALAPPDATA 'Microsoft\\WindowsApps\\chatgpt-desktop.exe');arguments=$link.Arguments;style=$link.WindowStyle} | ConvertTo-Json -Compress
   `],{encoding:'utf8',env:{...process.env,EVA_TEST_LINK:link}});
   const properties=JSON.parse(inspected.stdout);
   assert.equal(properties.target,properties.expected);
@@ -50,19 +50,25 @@ test('a stale owned shortcut requires explicit removal and a failed lookup creat
   await run([]);
   const link=join(desktop,'Codex EVA.lnk'),receiptPath=join(appdata,'CodexEva','shortcut-receipt.json');
   const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
-  receipt.executable='C:\\Old Package\\ChatGPT.exe';
+  receipt.aliasPath='C:\\Old Alias\\chatgpt-desktop.exe';
   await writeFile(receiptPath,JSON.stringify(receipt));
   const before=await readFile(link);
   await assert.rejects(run([]),/SHORTCUT_REFRESH_REQUIRED/);
   assert.deepEqual(await readFile(link),before);
-  receipt.version=1;
-  receipt.phase='prepared';
-  await writeFile(receiptPath,JSON.stringify(receipt));
-  await assert.rejects(run([]),/SHORTCUT_REFRESH_REQUIRED/);
-  assert.deepEqual(await readFile(link),before);
+  for(const version of [1,2]){
+    receipt.version=version;
+    receipt.phase='prepared';
+    await writeFile(receiptPath,JSON.stringify(receipt));
+    await assert.rejects(run([]),/SHORTCUT_REFRESH_REQUIRED/);
+    assert.deepEqual(await readFile(link),before);
+  }
   await run(['-Remove']);
   const command=`function Get-AppxPackage { @() }; & $env:EVA_TEST_SCRIPT -ShortcutDirectory $env:EVA_TEST_DESKTOP`;
   await assert.rejects(execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{env:{...process.env,APPDATA:appdata,EVA_TEST_SCRIPT:script,EVA_TEST_DESKTOP:desktop}}),/CODEX_INSTALL_NOT_UNIQUE/);
+  await assert.rejects(readFile(link),/ENOENT/);
+  await assert.rejects(readFile(receiptPath),/ENOENT/);
+  const noAlias=`function Get-AppxPackageManifest { [xml]'<Package><Applications><Application Id="App" Executable="app/ChatGPT.exe"/></Applications></Package>' }; & $env:EVA_TEST_SCRIPT -ShortcutDirectory $env:EVA_TEST_DESKTOP`;
+  await assert.rejects(execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',noAlias],{env:{...process.env,APPDATA:appdata,EVA_TEST_SCRIPT:script,EVA_TEST_DESKTOP:desktop}}),/CODEX_ALIAS_UNAVAILABLE/);
   await assert.rejects(readFile(link),/ENOENT/);
   await assert.rejects(readFile(receiptPath),/ENOENT/);
 });
@@ -76,6 +82,7 @@ test('launcher resolves the installed package each time, uses loopback, and refu
   const command=`
     . $env:EVA_TEST_LAUNCH
     function Get-AppxPackage { [pscustomobject]@{InstallLocation=$env:EVA_TEST_PACKAGE} }
+    function Get-AppxPackageManifest { [xml]'<Package><Applications><Application Id="App" Executable="app/ChatGPT.exe"><Extensions><Extension><AppExecutionAlias><ExecutionAlias Alias="chatgpt-desktop.exe"/></AppExecutionAlias></Extension></Extensions></Application></Applications></Package>' }
     function Get-CimInstance { if($env:EVA_TEST_RUNNING -eq '1'){[pscustomobject]@{ExecutablePath=(Join-Path $env:EVA_TEST_PACKAGE 'app\\ChatGPT.exe');CommandLine='ChatGPT.exe'}} }
     function New-CimInstance { param($ClassName,[switch]$ClientOnly,$Property) [pscustomobject]@{} }
     function Invoke-CimMethod { param($ClassName,$MethodName,$Arguments) [Console]::WriteLine(('SPAWN:'+(@{file='Windows process service';arguments=@($Arguments.CommandLine);style='Independent'}|ConvertTo-Json -Compress))); [pscustomobject]@{ReturnValue=0;ProcessId=123} }
@@ -87,7 +94,7 @@ test('launcher resolves the installed package each time, uses loopback, and refu
   const calls=result.stdout.trim().split(/\r?\n/).filter(line=>line.startsWith('SPAWN:')).map(line=>JSON.parse(line.slice(6)));
   assert.equal(calls.length,2);
   assert.equal(calls[0].style,'Independent');
-  assert.equal(calls[1].file,join(root,'app','ChatGPT.exe'));
+  assert.equal(calls[1].file,join(process.env.LOCALAPPDATA,'Microsoft','WindowsApps','chatgpt-desktop.exe'));
   assert.deepEqual(calls[1].arguments,['--remote-debugging-port=19327','--remote-debugging-address=127.0.0.1']);
   await assert.rejects(run('1'),error=>error.stdout.includes('CODEX_RESTART_REQUIRED')&&!error.stdout.includes('SPAWN:'));
 });
