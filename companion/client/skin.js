@@ -88,13 +88,17 @@
     text('[data-track]',media?.title||'');text('[data-artist]',media?.artist||'');
   }
   function hostModal() {
+    // A hidden root would otherwise keep covering the page: an element with
+    // display:none still receives hit tests, and inside a shadow tree the hit
+    // reports the host, so the host page's clicks would be swallowed.
     root.hidden=!!document.querySelector('dialog[open], [aria-modal="true"][role="dialog"]');
+    root.style.pointerEvents=root.hidden?'none':'';
   }
   function click(event) {
     const action=event.target.closest('[data-action]')?.dataset.action;
     if (!action)return;
     if (action==='settings') $('[data-settings]').hidden=false;
-    else if(action==='close-settings') $('[data-settings]').hidden=true;
+    else if(action==='close-settings') { $('[data-settings]').hidden=true; modalTick(); }
     else if(action==='reset'){settings={...defaults};applySettings();send('settings',{settings});}
     else if(action.startsWith('test-'))send('cue',{kind:action.slice(5),pilot});
     else if(['playpause','next','previous'].includes(action))send('media',{command:action,sourceId:state.media?.sourceId});
@@ -106,9 +110,13 @@
   }
   shadow.addEventListener('click',click);shadow.addEventListener('change',change);
   const themeObserver=new MutationObserver(theme);themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','class']});
-  const modalObserver=new MutationObserver(hostModal);modalObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal']});
+  // A host dialog opening and closing inside one MutationObserver batch can
+  // cancel out and leave the skin hidden; re-check on a microtask as well.
+  let modalQueued=false;
+  function modalTick(){if(disposed||modalQueued)return;modalQueued=true;queueMicrotask(()=>{modalQueued=false;if(!disposed)hostModal();});}
+  const modalObserver=new MutationObserver(modalTick);modalObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal']});
   const interval=setInterval(()=>{clock();if(state.quota)renderQuota();},1000);
-  window.__codexEva={updateState,setSettings:patch=>applySettings(patch),openSettings:()=>{$('[data-settings]').hidden=false;},getSettings:()=>({...settings}),getPilot:()=>pilot,
+  window.__codexEva={updateState,setSettings:patch=>applySettings(patch),openSettings:()=>{$('[data-settings]').hidden=false;modalTick();},getSettings:()=>({...settings}),getPilot:()=>pilot,
     dispose(){if(disposed)return;disposed=true;clearInterval(interval);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
   applySettings(settings);theme();clock();hostModal();updateState();
 })();

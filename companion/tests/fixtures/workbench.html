@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Codex EVA 夹具</title>
+<style>
+  html, body { margin: 0; height: 100%; font: 14px/1.6 'Microsoft YaHei', sans-serif;
+    background: var(--bg, #0b0b0d); color: var(--fg, #eee); }
+  body { display: grid; grid-template-columns: 220px 1fr 300px; grid-template-rows: 1fr auto; gap: 8px; padding: 8px; box-sizing: border-box; }
+  nav { grid-row: span 2; border-right: 1px solid #333; padding: 8px; }
+  main { overflow: auto; padding: 8px; }
+  aside { border-left: 1px solid #333; padding: 8px; overflow: auto; }
+  .composer { grid-column: 2 / 4; display: flex; gap: 8px; padding: 8px; border-top: 1px solid #333; }
+  .composer [contenteditable] { flex: 1; min-height: 48px; padding: 8px; background: #1a1a1f; border-radius: 6px; }
+  button { font: inherit; padding: 6px 12px; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  .msg { margin: 0 0 12px; }
+  code { background: #1c1c22; padding: 2px 4px; border-radius: 3px; }
+  html[data-theme="light"] { --bg: #fafafa; --fg: #1a1a1a; }
+  html[data-theme="light"] nav, html[data-theme="light"] aside { border-color: #ddd; }
+  html[data-theme="light"] .composer [contenteditable], html[data-theme="light"] code { background: #eee; }
+</style>
+</head>
+<body>
+  <nav aria-label="会话列表">
+    <h2>会话</h2>
+    <ul><li>重构登录流程</li><li>修复额度统计</li><li>编写单元测试</li></ul>
+  </nav>
+  <main id="thread">
+    <h1>项目工作台</h1>
+    <p class="msg">正在审阅代码与实现需求，请确认下面的改动。</p>
+    <p class="msg">运行 <code>npm test</code> 后的结果如下……</p>
+    <p class="msg">后续第二段用于撑开滚动区域，检查皮肤装饰是否遮住正文。</p>
+    <p class="msg">第三段同样用于验证滚动后的点击命中。</p>
+    <p class="msg">第四段。</p><p class="msg">第五段。</p><p class="msg">第六段。</p>
+  </main>
+  <aside aria-label="右侧面板">
+    <h2>变更</h2>
+    <p>src/session.mjs</p><p>src/main.mjs</p>
+  </aside>
+  <form class="composer" onsubmit="event.preventDefault()">
+    <div id="input" contenteditable="true" role="textbox" aria-label="输入消息">输入消息</div>
+    <button id="approve" type="button">批准操作</button>
+  </form>
+</body>
+</html>

@@ -43,6 +43,10 @@ WSL/Git Bash 下的已知环境限制：此处 `powershell.exe` 无法加载 `Mi
 - 设置面板打开、背景强度生效；
 - 宿主 `dialog.showModal()` 出现时整个皮肤隐藏，关闭后恢复；
 - 700px 窄窗口下宿主的「批准操作」按钮在几何中心可被命中（装饰层不拦截点击）；
+- 缩放 0.8 / 1.25 / 1.5 与 1440 / 1100 / 900 / 700 / 560 五档宽度下，输入框与审批按钮都可命中，页面无横向溢出；
+- 关闭右侧面板、或加一个更宽的面板后，布局不溢出；
+- 设置面板在宽窗口顶部锚定、窄窗口底部锚定，均不覆盖输入区与审批按钮；
+- 设置面板里关闭「扫描线」后切回深色，设置仍保持；
 - `dispose()` 后根节点移除、宿主按钮仍可用；
 - 额度 adapter（`tests/adapter.browser.mjs`）：加载时抓取一次；隐藏时不请求；隐藏→可见立即请求（加载时即隐藏的标签页也一样）；失败后按服务端提示的时长等待，期间不漏刷；`dispose()` 后页面入口全部消失。
 
@@ -80,4 +84,5 @@ WSL/Git Bash 下的已知环境限制：此处 `powershell.exe` 无法加载 `Mi
 - **已修**：`install.ps1` 中从未使用的 `-Install` 参数已删除。
 - **已补**：`src/adapters/` 按「当前指纹 → 契约」识别版本（当前 `mcp-view-1`，指纹见上文）。指纹未验证时不接入并在托盘说明原因，`node src/diagnose.mjs` 输出 `versionAdapter.status`；页面 adapter 的方法名全部来自契约，不再硬编码。主循环从已安装客户端计算指纹后传入，`npm start` 走同一路径。
 - **已补**：额度刷新按可见性 5 分钟 / 隐藏暂停 / 恢复即刷，限流按服务端提示退避，并修掉了页面里 `crypto.randomUUID` 不可用时请求被吞、以及 `timer` 变量遮蔽导致退避失效两个隐患。
-- **未处理（需决策）**：托盘「设置」在未连接时无反应；`classifyThread` 对未知来源静默丢弃，未按设计报告兼容状态；`tests/client.test.mjs`、`fixtures/workbench.html` 等计划中的夹具文件名未采用（现有 `client.browser.mjs`、`adapter.browser.mjs` 覆盖了主要布局与额度行为）。
+- **已补**：浏览器夹具补齐 —— `tests/fixtures/workbench.html` 夹具页、`tests/fixtures-workbench.browser.mjs`（缩放、窄窗口、右侧面板开合、设置面板不遮挡、设置换主题、未知主题值）与共享的 `tests/browser-harness.mjs`。顺带修掉三处真实缺陷：皮肤根节点进入宿主弹窗状态时 `pointer-events` 未关闭；宽窗口设置面板在 `max-height: calc(100vh - 120px)` 下会压到输入区；窄窗口设置面板缺少右边界导致收缩压住审批按钮。
+- **未处理（需决策）**：托盘「设置」在未连接时无反应；`classifyThread` 对未知来源静默丢弃，未按设计报告兼容状态。
