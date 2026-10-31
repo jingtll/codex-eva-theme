@@ -36,4 +36,6 @@ test('companion startup survives the launching terminal job closing', {skip:proc
   await new Promise(resolve=>setTimeout(resolve,200));
   assert.ok(pid>0);
   assert.doesNotThrow(()=>process.kill(pid,0),'companion must remain alive after its parent terminal job closes');
+  const identity=await execFile('powershell.exe',['-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('./fixtures/process-identity.ps1',import.meta.url)),'-ProcessId',String(pid)],{encoding:'utf8'});
+  assert.equal(JSON.parse(identity.stdout).packageCode,15700,'companion must run outside the Codex MSIX identity and lifetime');
 });

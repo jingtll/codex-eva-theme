@@ -28,6 +28,12 @@ $DataDir = Join-Path $env:APPDATA 'CodexEva'
 $ReceiptPath = Join-Path $DataDir 'install-receipt.json'
 $RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $RunName = 'CodexEvaCompanion'
+. (Join-Path $PSScriptRoot 'desktop-context.ps1')
+# Scratch-key tests cannot alter real login registration. Production writes
+# must happen outside the Store app's virtual registry/data views.
+if (-not $env:CODEX_EVA_RUN_KEY -and (Get-EvaPackageCode) -ne 15700) {
+  throw 'NATIVE_DESKTOP_REQUIRED: 请改用 desktop.ps1 -Action Install（卸载用 Uninstall）。'
+}
 # Tests redirect registration to a scratch key so they never touch the real
 # startup entry; anything other than HKCU is rejected below.
 if ($env:CODEX_EVA_RUN_KEY) { $RunKey = $env:CODEX_EVA_RUN_KEY }

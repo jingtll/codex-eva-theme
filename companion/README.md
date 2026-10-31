@@ -17,22 +17,25 @@
 在仓库根目录运行一次安装（Windows PowerShell 5.1）：
 
 ```powershell
-powershell -NoProfile -File companion\windows\install.ps1 -CreateShortcut -ShortcutDirectory "$PWD\companion" -StartCompanion
+powershell -NoProfile -File companion\windows\desktop.ps1 -Action Install
+powershell -NoProfile -File companion\windows\shortcut.ps1 -ShortcutDirectory "$PWD\companion"
 ```
 
 之后打开 `companion\Codex EVA.lnk`。快捷方式指向 `%LOCALAPPDATA%\Microsoft\WindowsApps\chatgpt-desktop.exe`，这是官方 MSIX 主应用注册的执行别名，参数只有调试端口及 loopback 地址，不经过隐藏 PowerShell 或执行策略覆盖。创建前验证当前官方包的主应用及别名注册，缺失时报告 `CODEX_ALIAS_UNAVAILABLE`，不会退回包内裸 exe。
 
 不能直接启动版本目录内的 `app\ChatGPT.exe`：本机实测会丢失包身份，并被 Codex Maid Widget 的官方窗口识别规则拒绝；应用 ID 缺失也与用户报告的任务栏额外分组相符。此处已用官方别名替代；任务栏分组和两个桌宠的最终识别仍以真实重启验收为准。
 
-快捷方式不负责启动伴随程序：Run 项负责下次登录自启，安装命令中的 `-StartCompanion` 负责本次独立启动。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
+快捷方式不负责启动伴随程序：真实 Run 项负责下次登录自启，`desktop.ps1 -Action Install` 同时负责本次独立启动。安装经 Explorer 桌面助手执行，核对无包身份、真实启动项、安装收据及运行进程后才报告成功，避免在 MSIX 虚拟视图里注册后误报成功。Windows 已禁用的启动项会明确报错，不自动覆盖禁用选择。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
 
 单独启动伴随程序、使其不依附当前终端或 Codex：
 
 ```powershell
-powershell -NoProfile -File companion\windows\start.ps1 -NodePath (Get-Command node.exe).Source
+powershell -NoProfile -File companion\windows\desktop.ps1 -Action Start
 ```
 
-该脚本通过本机 `Win32_Process.Create` 直接启动 Node，不新增服务或计划任务、不修改系统执行策略。与入口和 Run 项分别承担职责；已经运行时由单实例锁阻止重复接入。安装的 `-StartCompanion` 在收据提交后执行，启动失败会明确报告安装配置仍已保存，可重试上面的命令。
+桌面助手经 Explorer 直接启动 Node，不新增服务或计划任务、不修改系统执行策略。与入口和 Run 项分别承担职责；已经运行时由单实例锁阻止重复接入。`start.ps1` 只负责派发，`desktop.ps1` 另行确认真实锁文件对应的本项目进程已运行，不把 ShellExecute 返回当作启动完成。
+
+只读核对真实状态使用 `desktop.ps1 -Action Status`；卸载使用 `desktop.ps1 -Action Uninstall`，仍按收据保护用户改动。原生桌面修复记录见 [重启后启动链路](../docs/validation/2026-10-31-native-desktop-startup.md)。
 
 不指定 `-ShortcutDirectory` 时默认生成到桌面。本机旧入口被火绒判为 `TrojanDownloader/LNK.Agent.g` 并删除，换目录并未解决。本轮新入口和伴随程序目录经火绒自定义扫描：78 个对象，风险 0 个；扫描后入口仍在。该结果不代表点击启动及后续行为均已验收。没有关闭防护或添加信任。
 

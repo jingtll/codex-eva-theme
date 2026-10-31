@@ -2,13 +2,13 @@
 $ErrorActionPreference = 'Stop'
 $Entry = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\main.mjs'
 if (-not (Test-Path -LiteralPath $NodePath -PathType Leaf) -or -not (Test-Path -LiteralPath $Entry -PathType Leaf)) { throw '伴随程序或 Node.js 已移动，请重新安装。' }
-# Start outside the launching terminal's Windows job. A normal child process
-# is otherwise killed when the desktop agent/terminal job closes.
-$Startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow = [uint16]0}
-$Result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
-  CommandLine = ('"{0}" "{1}"' -f $NodePath, $Entry)
-  CurrentDirectory = Split-Path -Parent $PSScriptRoot
-  ProcessStartupInformation = $Startup
-}
-if ($Result.ReturnValue -ne 0) { throw ('COMPANION_START_FAILED: Windows 返回 ' + $Result.ReturnValue) }
-Write-Output ('COMPANION-OK: started PID ' + $Result.ProcessId)
+# Ask the actual Explorer desktop to own the process, rather than the Store
+# client, its terminal job or a WMI broker. ShellExecute has no child PID:
+# desktop.ps1 separately verifies the native settings lock and live process.
+if ($Entry -match '["\r\n]' -or $NodePath -match '["\r\n]') { throw 'INVALID_LAUNCH_PATH' }
+$Shell = New-Object -ComObject Shell.Application
+$DesktopHwnd = 0
+$Desktop = $Shell.Windows().FindWindowSW(0, 0, 8, [ref]$DesktopHwnd, 1)
+if ($null -eq $Desktop) { throw 'DESKTOP_UNAVAILABLE: Windows 桌面尚未就绪，未启动伴随程序。' }
+$Desktop.Document.Application.ShellExecute($NodePath, ('"{0}"' -f $Entry), (Split-Path -Parent $PSScriptRoot), '', 0)
+Write-Output 'COMPANION-DISPATCHED: 等待独立桌面进程就绪'

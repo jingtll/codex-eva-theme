@@ -84,8 +84,17 @@ test('launcher resolves the installed package each time, uses loopback, and refu
     function Get-AppxPackage { [pscustomobject]@{InstallLocation=$env:EVA_TEST_PACKAGE} }
     function Get-AppxPackageManifest { [xml]'<Package><Applications><Application Id="App" Executable="app/ChatGPT.exe"><Extensions><Extension><AppExecutionAlias><ExecutionAlias Alias="chatgpt-desktop.exe"/></AppExecutionAlias></Extension></Extensions></Application></Applications></Package>' }
     function Get-CimInstance { if($env:EVA_TEST_RUNNING -eq '1'){[pscustomobject]@{ExecutablePath=(Join-Path $env:EVA_TEST_PACKAGE 'app\\ChatGPT.exe');CommandLine='ChatGPT.exe'}} }
-    function New-CimInstance { param($ClassName,[switch]$ClientOnly,$Property) [pscustomobject]@{} }
-    function Invoke-CimMethod { param($ClassName,$MethodName,$Arguments) [Console]::WriteLine(('SPAWN:'+(@{file='Windows process service';arguments=@($Arguments.CommandLine);style='Independent'}|ConvertTo-Json -Compress))); [pscustomobject]@{ReturnValue=0;ProcessId=123} }
+    function New-Object {
+      param($ComObject)
+      if($ComObject -ne 'Shell.Application'){throw 'UNEXPECTED_COM_OBJECT'}
+      $app=[pscustomobject]@{}
+      $app | Add-Member ScriptMethod ShellExecute {param($file,$arguments,$cwd,$verb,$style) [Console]::WriteLine(('SPAWN:'+(@{file=$file;arguments=@($arguments);style='Independent'}|ConvertTo-Json -Compress)))}
+      $windows=[pscustomobject]@{Desktop=[pscustomobject]@{Document=[pscustomobject]@{Application=$app}}}
+      $windows | Add-Member ScriptMethod FindWindowSW {param($a,$b,$c,$d,$e) return $this.Desktop}
+      $shell=[pscustomobject]@{WindowList=$windows}
+      $shell | Add-Member ScriptMethod Windows {return $this.WindowList}
+      return $shell
+    }
     function Start-Process { param($FilePath,$ArgumentList,$WindowStyle) [Console]::WriteLine(('SPAWN:'+(@{file=$FilePath;arguments=@($ArgumentList);style=$WindowStyle}|ConvertTo-Json -Compress))) }
     try { Start-EvaCodex } catch { [Console]::WriteLine($_.Exception.Message); exit 3 }
   `;
