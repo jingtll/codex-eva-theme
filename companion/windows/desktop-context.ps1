@@ -1,4 +1,14 @@
-﻿function Get-EvaPackageCode {
+﻿function Find-EvaNode {
+  $candidates = @(
+    (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source),
+    (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Programs\nodejs\node.exe')
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
+  return $candidates | Select-Object -First 1
+}
+
+function Get-EvaPackageCode {
   if (-not ('EvaDesktopContext' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;

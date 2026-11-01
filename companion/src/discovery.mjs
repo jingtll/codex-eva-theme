@@ -188,14 +188,16 @@ function isLoopbackEndpoint(endpoint) {
  * only the confirmed main page target. Never broadens to browsers, login pages
  * or plugin iframes. Returns a status instead of throwing on unreachable ports.
  */
+export const WORKBENCH_STATE_EXPRESSION = `({
+  workbench:!!window.electronBridge&&[...document.querySelectorAll('[contenteditable="true"],textarea[placeholder]')].some(e=>{const b=e.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(e).visibility!=='hidden'}),
+  visible:document.visibilityState==='visible',focused:document.hasFocus()
+})`;
+
 export async function inspectWorkbenchTarget(target, { timeoutMs = 800 } = {}) {
   const cdp = await connectCdp(target.webSocketDebuggerUrl, { timeoutMs });
   try {
     // Only layout/capability booleans leave the page, never chat text or titles.
-    const result = await cdp.send('Runtime.evaluate', { expression: `({
-      workbench:!!window.electronBridge&&[...document.querySelectorAll('[contenteditable="true"],textarea[placeholder]')].some(e=>{const b=e.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(e).visibility!=='hidden'}),
-      visible:document.visibilityState==='visible',focused:document.hasFocus()
-    })`, returnByValue: true });
+    const result = await cdp.send('Runtime.evaluate', { expression: WORKBENCH_STATE_EXPRESSION, returnByValue: true });
     if (result.exceptionDetails || !result.result?.value) throw new Error('TARGET_INSPECTION_FAILED');
     return result.result.value;
   } finally { cdp.close(); }

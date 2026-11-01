@@ -42,15 +42,6 @@ if ($RunKey -notlike 'HKCU:\*') {
   exit 6
 }
 
-function Find-Node {
-  $candidates = @(
-    (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source),
-    (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
-    (Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe'),
-    (Join-Path $env:LOCALAPPDATA 'Programs\nodejs\node.exe')
-  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
-  return $candidates | Select-Object -First 1
-}
 
 function Read-Receipt {
   return Read-EvaReceipt $ReceiptPath
@@ -116,7 +107,7 @@ if ($Uninstall) {
 }
 
 if (-not (Test-Path -LiteralPath $Entry -PathType Leaf)) { throw '未找到伴随程序入口。' }
-$Node = Find-Node
+$Node = Find-EvaNode
 if (-not $Node) { throw '未找到 Node.js 22 或更高版本。' }
 $Version = (& $Node --version) -replace '^v', ''
 if ([int]$Version.Split('.')[0] -lt 22) { throw '需要 Node.js 22 或更高版本。' }

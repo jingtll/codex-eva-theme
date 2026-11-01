@@ -38,7 +38,9 @@ if($Worker){
     }elseif($Action -eq 'Uninstall'){
       & (Join-Path $PSScriptRoot 'install.ps1') -Uninstall | Out-Null
     }elseif($Action -eq 'Start'){
-      & (Join-Path $PSScriptRoot 'start.ps1') -NodePath (Get-Command node.exe -ErrorAction Stop).Source | Out-Null
+      $Node=Find-EvaNode
+      if(-not $Node){throw 'NODE_NOT_FOUND: 未找到 Node.js，请安装 Node.js 22 或更高版本。'}
+      & (Join-Path $PSScriptRoot 'start.ps1') -NodePath $Node | Out-Null
     }
     $State=Read-DesktopState
     if($Action -in @('Install','Start')){

@@ -1,5 +1,6 @@
 ﻿param([ValidateRange(1024, 65535)][int]$DebugPort = 19327)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'desktop-context.ps1')
 
 function Resolve-CodexExecutable {
   $Packages = @(Get-AppxPackage -Name OpenAI.Codex -ErrorAction Stop)
@@ -48,7 +49,8 @@ function Start-EvaCompanion {
 }
 
 function Wait-EvaTheme {
-  $Node = (Get-Command node.exe -ErrorAction Stop).Source
+  $Node = Find-EvaNode
+  if (-not $Node) { throw 'NODE_NOT_FOUND: 未找到 Node.js，请安装 Node.js 22 或更高版本。' }
   $Probe = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\launch-ready.mjs'
   $Report = & $Node $Probe $DebugPort
   if ($LASTEXITCODE -ne 0) { throw 'THEME_CHECK_FAILED: 主题状态检查失败，请查看伴随程序托盘状态。' }

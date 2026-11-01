@@ -1,6 +1,6 @@
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {isCodexTarget} from './discovery.mjs';
+import {isCodexTarget,WORKBENCH_STATE_EXPRESSION} from './discovery.mjs';
 import {connectCdp} from './cdp.mjs';
 
 // Read only derived UI state; no chat text or account data leaves the renderer.
@@ -11,14 +11,14 @@ export async function inspectThemeTargets(targets, connect = connectCdp) {
     try {
       cdp=await connect(target.webSocketDebuggerUrl,{timeoutMs:1000});
       const result=await cdp.send('Runtime.evaluate',{
-        expression:'({visible:document.visibilityState==="visible",composer:!!document.querySelector(\'[contenteditable="true"],textarea[placeholder]\'),skin:!!window.__codexEva})',
+        expression:`Object.assign(${WORKBENCH_STATE_EXPRESSION},{skin:!!window.__codexEva})`,
         returnByValue:true,
       });
       if (result.result?.value) pages.push(result.result.value);
     } catch { /* A renderer may be replaced during startup; retry on the next poll. */ }
     finally { cdp?.close(); }
   }
-  const workbenches=pages.filter(page=>page.composer);
+  const workbenches=pages.filter(page=>page.workbench);
   const visible=workbenches.filter(page=>page.visible);
   if (visible.length?visible.every(page=>page.skin):workbenches.some(page=>page.skin)) return 'ready';
   return workbenches.length?'theme_unavailable':pages.length?'waiting_for_workbench':'endpoint_unavailable';
