@@ -2,64 +2,53 @@
 
 给 Codex 工作台套上 EVA 双角色皮肤：深色为明日香，浅色为绫波丽。
 
-当前使用新增的 **Codex EVA** 快捷方式，通过官方 MSIX 执行别名启动客户端，伴随程序独立运行。原 MSIX 图标保留，普通启动不带调试端口，因此没有皮肤。首次使用前请先保存工作并完全退出 Codex，包括旧的无包身份实例。新快捷方式不经过脚本检查，也不会提示或替你关闭聊天；已有普通实例可能直接复用，无法因此补开端口。
+日常使用 **Codex EVA** 快捷方式：点击时先确认独立伴随程序已运行，再通过官方 MSIX 执行别名打开 Codex，并检查工作台主题。不依赖登录自启，重复点击不会建立第二个伴随实例。原 MSIX 图标保留。
 
-启动 Codex 后，伴随程序开机驻留托盘，检测到本机调试端点就接入；没有就显示「等待 Codex 调试入口」。
+如果普通模式的 Codex 已运行，启动器会提示先保存工作并完全退出，不会替你关闭聊天；调试端口无法补加到已运行的普通实例上。
 
 ## 环境要求
 
 - Windows 10/11
 - Node.js 22+（`node --version`）
 - Windows PowerShell 5.1（安装与托盘用；PowerShell 7 不支持 WinRT 媒体桥的写法）
+- Windows 自带 .NET Framework 4.x 编译器（首次生成点击启动器时使用）
 
-## 启动 Codex
+## 一次配置，以后点击启动
 
-在仓库根目录运行一次安装（Windows PowerShell 5.1）：
+在仓库根目录运行（Windows PowerShell 5.1）：
 
 ```powershell
-powershell -NoProfile -File companion\windows\desktop.ps1 -Action Install
 powershell -NoProfile -File companion\windows\shortcut.ps1 -ShortcutDirectory "$PWD\companion"
 ```
 
-之后打开 `companion\Codex EVA.lnk`。快捷方式指向 `%LOCALAPPDATA%\Microsoft\WindowsApps\chatgpt-desktop.exe`，这是官方 MSIX 主应用注册的执行别名，参数只有调试端口及 loopback 地址，不经过隐藏 PowerShell 或执行策略覆盖。创建前验证当前官方包的主应用及别名注册，缺失时报告 `CODEX_ALIAS_UNAVAILABLE`，不会退回包内裸 exe。
-
-不能直接启动版本目录内的 `app\ChatGPT.exe`：本机实测会丢失包身份，并被 Codex Maid Widget 的官方窗口识别规则拒绝；应用 ID 缺失也与用户报告的任务栏额外分组相符。此处已用官方别名替代；任务栏分组和两个桌宠的最终识别仍以真实重启验收为准。
-
-快捷方式不负责启动伴随程序：真实 Run 项负责下次登录自启，`desktop.ps1 -Action Install` 同时负责本次独立启动。安装经 Explorer 桌面助手执行，核对无包身份、真实启动项、安装收据及运行进程后才报告成功，避免在 MSIX 虚拟视图里注册后误报成功。Windows 已禁用的启动项会明确报错，不自动覆盖禁用选择。若仅运行普通 `npm start`，伴随程序可能随终端或 Codex 的 Windows 任务对象结束而退出。
-
-单独启动伴随程序、使其不依附当前终端或 Codex：
-
-```powershell
-powershell -NoProfile -File companion\windows\desktop.ps1 -Action Start
-```
-
-桌面助手经 Explorer 直接启动 Node，不新增服务或计划任务、不修改系统执行策略。与入口和 Run 项分别承担职责；已经运行时由单实例锁阻止重复接入。`start.ps1` 只负责派发，`desktop.ps1` 另行确认真实锁文件对应的本项目进程已运行，不把 ShellExecute 返回当作启动完成。
-
-只读核对真实状态使用 `desktop.ps1 -Action Status`；卸载使用 `desktop.ps1 -Action Uninstall`，仍按收据保护用户改动。原生桌面修复记录见 [重启后启动链路](../docs/validation/2026-10-31-native-desktop-startup.md)。
-
-不指定 `-ShortcutDirectory` 时默认生成到桌面。本机旧入口被火绒判为 `TrojanDownloader/LNK.Agent.g` 并删除，换目录并未解决。本轮新入口和伴随程序目录经火绒自定义扫描：78 个对象，风险 0 个；扫描后入口仍在。该结果不代表点击启动及后续行为均已验收。没有关闭防护或添加信任。
-
-快捷方式和图标记录哈希，卸载从收据读取原目录，保留用户修改。仅创建或移除入口、不修改开机启动项时，分别运行 `companion\windows\shortcut.ps1`（可带 `-ShortcutDirectory`）或加 `-Remove`。
-
-Windows 负责把稳定别名关联到当前官方版本，不再把版本目录作为启动目标。旧版 v1 脚本入口、v2 裸 exe 入口或已变化的别名需先移除再重建，创建脚本会报 `SHORTCUT_REFRESH_REQUIRED`；不会恢复旧版准备态。先运行下列命令移除匹配的自有入口，再重复安装命令。
+以后开机后打开 `companion\Codex EVA.lnk` 即可，不需要先运行命令或安装开机常驻。默认不指定 `-ShortcutDirectory` 时会生成到桌面。若报告 `SHORTCUT_REFRESH_REQUIRED`，先移除哈希匹配的旧入口再重新创建；用户修改过的链接会保留并报告冲突：
 
 ```powershell
 powershell -NoProfile -File companion\windows\shortcut.ps1 -Remove
 ```
 
-用带调试参数的方式启动（需先完全退出已运行的 Codex）：
+v4 快捷方式指向项目内 build/CodexEvaLauncher.exe，它由 windows/ClickLauncher.cs 使用 Windows 自带 .NET Framework 编译器在本地生成，无需下载编译依赖。构建收据验证源文件和二进制哈希，二进制被修改时拒绝覆盖。快捷方式不使用隐藏 PowerShell 命令或 ExecutionPolicy Bypass 参数。启动器内部调用已有 PowerShell 启动流程，不修改系统执行策略。
+
+启动流程会：
+
+1. 检查官方 Codex 安装、执行别名以及已有普通模式实例。
+2. 通过 desktop.ps1 -Action Start 启动并核实独立伴随进程。单实例锁复用已有进程，启动器退出后伴随程序继续运行。
+3. 用官方 chatgpt-desktop.exe 别名打开 Codex，携带端口 19327 和 loopback 地址，保留官方包身份。
+4. 最多等待约 30 秒检查工作台皮肤。工作台已经加载但没有皮肤时显示失败原因；尚未登录或工作台尚未加载时，伴随程序会继续等待。
+
+运行失败会弹出提示，不把进程派发成功等同于主题已经挂载。供终端诊断使用的 build\CodexEvaLauncher.exe --diagnose 执行相同启动流程，将错误写入标准错误并返回非零退出码。
+
+单独启动伴随程序仍可运行：
 
 ```powershell
-& "$env:LOCALAPPDATA\Microsoft\WindowsApps\chatgpt-desktop.exe" --remote-debugging-port=19327 --remote-debugging-address=127.0.0.1
+powershell -NoProfile -File companion\windows\desktop.ps1 -Action Start
 ```
 
-`node src/diagnose.mjs` 发现的包内 exe 路径用于只读诊断与图标读取，日常启动使用上面的官方别名。通过安装脚本生成新入口，保留原 MSIX 入口。
+只读查看真实进程和可选自启项使用 desktop.ps1 -Action Status。本次默认方式下 startupEnabled: false 不影响点击启动，关键是 ownerAlive。卸载使用 desktop.ps1 -Action Uninstall；仅移除快捷方式使用 shortcut.ps1 -Remove。入口、图标和 AppData 收据按哈希保护；仓库内 build/ 构建产物保留，可供重新生成入口复用。
 
-伴随程序会从运行中的客户端发现调试端口；也支持显式指定：
+不要直接打开版本目录内的 app\ChatGPT.exe，这会丢失官方 MSIX 身份。不要移动 companion 内的源代码、启动脚本或构建目录，否则需重新配置入口。
 
-```powershell
-$env:CODEX_EVA_DEBUG_PORT="19327"; npm start
-```
+旧 v1 脚本入口曾被火绒删除；本轮入口是不同的本地编译 EXE 方案，不能用旧扫描结果证明它已通过防护或开机验收。没有关闭防护或添加信任。实际验证范围见 [点击启动记录](../docs/validation/2026-11-01-click-to-start.md)。
 
 ## 先诊断
 
@@ -84,18 +73,20 @@ npm start
 
 深色人物使用加粗的饱和红色线稿，默认可见度约 65%；“背景强度”仍可调节其透明度，归零时隐藏。浅色人物沿用原样。该效果在渲染时生成，原人物素材未改动。
 
-## 安装开机自启
+## 可选的登录自启（非日常启动前提）
 
 ```powershell
-powershell -NoProfile -File companion\windows\install.ps1
+powershell -NoProfile -File companion\windows\desktop.ps1 -Action Install
 ```
 
 安装检查 `src/main.mjs` 与 Node 22+，先保存安装收据，再在当前用户 `Run` 键注册直接启动 Node 的命令，不经过 PowerShell。登录时可能显示 Node 控制台，关闭它会停止伴随程序。收据含启动项原值与命令；可将匹配的旧版隐藏脚本命令迁移为新命令，首次安装前的原值保持不变。用户已改过时拒绝覆盖。伴随程序可以先于 Codex 启动，随后发现端口并检查资源指纹。
 
+本机在 2026-11-01 实测启动项成功写入后约一秒消失，具体移除来源未确认；此项不作为本机默认方案。使用上面的点击启动不需要恢复此启动项。
+
 ## 卸载 / 恢复
 
 ```powershell
-powershell -NoProfile -File companion\windows\uninstall.ps1
+powershell -NoProfile -File companion\windows\desktop.ps1 -Action Uninstall
 ```
 
 卸载先通知伴随程序干净退出（暂停时同样有效），再删除 `settings.json` 与收据。启动项仍与收据一致时恢复安装前的值，原来没有值则删除；用户后改的值保留。Codex 的会话、凭据和项目文件不受影响。
@@ -110,7 +101,7 @@ powershell -NoProfile -File companion\windows\uninstall.ps1
 npm test                     # 契约测试（含 PowerShell 脚本解析、安装/卸载）
 ```
 
-已安装官方 MSIX 客户端的 Windows 环境可显式运行 `npm run test:msix-entry`：它用全新空目录启动正式脚本生成的临时快捷方式，验证实际进程的包身份、应用 ID 和 loopback 调试端口；结束时只关闭携带该测试独有数据路径的实例。该项不包含在普通契约或浏览器夹具中，也不证明两个桌宠已完成真实交互验收。
+已安装官方 MSIX 客户端的 Windows 环境可显式运行 `npm run test:msix-entry`：它使用正式脚本收据中验证过的官方别名，以全新空目录和隔离端口启动客户端，验证实际进程的包身份、应用 ID 和 loopback 调试端口；结束时只关闭携带该测试独有数据路径的实例。该项不包含在普通契约或浏览器夹具中，也不证明两个桌宠已完成真实交互验收。
 
 浏览器布局夹具需要显式给出一个无界面浏览器的调试端点：
 
