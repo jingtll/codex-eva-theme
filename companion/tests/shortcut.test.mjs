@@ -20,11 +20,11 @@ test('desktop shortcut is repeatable and removal preserves a user-modified short
   const inspected=await execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',`
     $link=(New-Object -ComObject WScript.Shell).CreateShortcut($env:EVA_TEST_LINK)
     $package=Get-AppxPackage -Name OpenAI.Codex
-    @{target=$link.TargetPath;expected=(Join-Path $env:LOCALAPPDATA 'Microsoft\\WindowsApps\\chatgpt-desktop.exe');arguments=$link.Arguments;style=$link.WindowStyle} | ConvertTo-Json -Compress
-  `],{encoding:'utf8',env:{...process.env,EVA_TEST_LINK:link}});
+    @{target=$link.TargetPath;expected=(Join-Path $env:EVA_TEST_ROOT 'build\\CodexEvaLauncher.exe');arguments=$link.Arguments;style=$link.WindowStyle} | ConvertTo-Json -Compress
+  `],{encoding:'utf8',env:{...process.env,EVA_TEST_LINK:link,EVA_TEST_ROOT:fileURLToPath(new URL('../',import.meta.url))}});
   const properties=JSON.parse(inspected.stdout);
   assert.equal(properties.target,properties.expected);
-  assert.equal(properties.arguments,'--remote-debugging-port=19327 --remote-debugging-address=127.0.0.1');
+  assert.equal(properties.arguments,'');
   assert.equal(properties.style,1);
   const first=await readFile(link);
   await run([]);
@@ -55,7 +55,7 @@ test('a stale owned shortcut requires explicit removal and a failed lookup creat
   const before=await readFile(link);
   await assert.rejects(run([]),/SHORTCUT_REFRESH_REQUIRED/);
   assert.deepEqual(await readFile(link),before);
-  for(const version of [1,2]){
+  for(const version of [1,2,3]){
     receipt.version=version;
     receipt.phase='prepared';
     await writeFile(receiptPath,JSON.stringify(receipt));
@@ -81,6 +81,8 @@ test('launcher resolves the installed package each time, uses loopback, and refu
   const launcher=fileURLToPath(new URL('../windows/launch.ps1',import.meta.url));
   const command=`
     . $env:EVA_TEST_LAUNCH
+    function Start-EvaCompanion { [Console]::WriteLine('SPAWN:{"style":"Independent"}') }
+    function Wait-EvaTheme { [Console]::WriteLine('THEME-CHECKED') }
     function Get-AppxPackage { [pscustomobject]@{InstallLocation=$env:EVA_TEST_PACKAGE} }
     function Get-AppxPackageManifest { [xml]'<Package><Applications><Application Id="App" Executable="app/ChatGPT.exe"><Extensions><Extension><AppExecutionAlias><ExecutionAlias Alias="chatgpt-desktop.exe"/></AppExecutionAlias></Extension></Extensions></Application></Applications></Package>' }
     function Get-CimInstance { if($env:EVA_TEST_RUNNING -eq '1'){[pscustomobject]@{ExecutablePath=(Join-Path $env:EVA_TEST_PACKAGE 'app\\ChatGPT.exe');CommandLine='ChatGPT.exe'}} }

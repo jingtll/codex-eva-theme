@@ -36,16 +36,35 @@ function Start-EvaCodex {
       throw 'CODEX_RESTART_REQUIRED: Codex 正以普通模式运行。请先保存工作并完全退出，再从 Codex EVA 快捷方式打开；本程序不会关闭你的聊天。'
     }
   }
-  $Node = (Get-Command node.exe -ErrorAction Stop).Source
-  & (Join-Path $PSScriptRoot 'start.ps1') -NodePath $Node
+  Start-EvaCompanion
   # The registered alias preserves package identity; the package's raw exe does not.
   Start-Process -FilePath $LaunchAlias -ArgumentList @("--remote-debugging-port=$DebugPort", '--remote-debugging-address=127.0.0.1')
+  Wait-EvaTheme
+}
+
+function Start-EvaCompanion {
+  # This verifies the independent desktop process, not merely ShellExecute dispatch.
+  & (Join-Path $PSScriptRoot 'desktop.ps1') -Action Start | Out-Null
+}
+
+function Wait-EvaTheme {
+  $Node = (Get-Command node.exe -ErrorAction Stop).Source
+  $Probe = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\launch-ready.mjs'
+  $Report = & $Node $Probe $DebugPort
+  if ($LASTEXITCODE -ne 0) { throw 'THEME_CHECK_FAILED: 主题状态检查失败，请查看伴随程序托盘状态。' }
+  $State = $Report | ConvertFrom-Json
+  if ($State.status -eq 'ready') { return }
+  if ($State.status -eq 'waiting_for_workbench') {
+    Write-Output 'EVA-WAITING: 等待登录或工作台加载，伴随程序会继续自动接入。'
+    return
+  }
+  throw ('THEME_NOT_READY: Codex 已启动，但主题尚未就绪（' + $State.status + '）。请查看 EVA 托盘状态；可能是版本不兼容、主题已暂停或启动被阻止。')
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
+  [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
   try { Start-EvaCodex } catch {
-    Add-Type -AssemblyName System.Windows.Forms
-    [void][Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Codex EVA', 'OK', 'Information')
+    [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
   }
 }

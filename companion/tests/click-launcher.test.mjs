@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp, mkdir, readFile, writeFile, copyFile, rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {execFile as callback} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+const execFile=promisify(callback);
+const windows=fileURLToPath(new URL('../windows/',import.meta.url));
+
+test('compiled click launcher runs the adjacent launcher, returns failures and protects changed builds', {skip:process.platform!=='win32'},async t=>{
+  const cache=fileURLToPath(new URL('../../.cache/',import.meta.url));
+  await mkdir(cache,{recursive:true});
+  const root=await mkdtemp(join(cache,'eva-click-launch-'));
+  t.after(()=>rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100}));
+  await mkdir(join(root,'windows'));
+  for(const file of ['build-launcher.ps1','ClickLauncher.cs']) await copyFile(join(windows,file),join(root,'windows',file));
+  const marker=join(root,'launched.txt');
+  await writeFile(join(root,'windows','launch.ps1'),`[IO.File]::WriteAllText('${marker.replaceAll("'","''")}','started'); exit 0`);
+  const build=()=>execFile('powershell.exe',['-NoProfile','-NonInteractive','-File',join(root,'windows','build-launcher.ps1')],{encoding:'utf8',windowsHide:true});
+  const first=JSON.parse((await build()).stdout);
+  await execFile(first.path,[],{windowsHide:true,timeout:10000});
+  assert.equal(await readFile(marker,'utf8'),'started');
+  assert.equal(JSON.parse((await build()).stdout).sha256,first.sha256,'unchanged build is reused');
+  const source=join(root,'windows','ClickLauncher.cs');
+  await writeFile(source,(await readFile(source,'utf8'))+'\n// source update\n');
+  assert.notEqual(JSON.parse((await build()).stdout).sourceSha256,first.sourceSha256,'a source update rebuilds the owned executable');
+  await execFile(first.path,[],{windowsHide:true,timeout:10000});
+  await writeFile(join(root,'windows','launch.ps1'),"[Console]::Error.WriteLine('FIXTURE_START_FAILED'); exit 7");
+  await assert.rejects(execFile(first.path,['--diagnose'],{windowsHide:true,timeout:10000}),e=>e.code===7&&e.stderr.includes('FIXTURE_START_FAILED'));
+  await writeFile(first.path,'user-modified launcher');
+  await assert.rejects(build(),/LAUNCHER_BUILD_CONFLICT/);
+  assert.equal(await readFile(first.path,'utf8'),'user-modified launcher');
+});

@@ -10,8 +10,9 @@ import {findCodexTarget} from '../src/discovery.mjs';
 import {connectCdp} from '../src/cdp.mjs';
 const execFile=promisify(callback);
 
-// Explicit smoke command only: it starts an isolated installed official client.
-test('generated MSIX shortcut preserves package identity, app ID and loopback debugging', {skip:process.platform!=='win32'},async t=>{
+// Identity smoke for the official alias used by the click launcher. Companion
+// startup is tested separately; this disposable link never starts a real companion.
+test('the official alias used by the launcher preserves package identity, app ID and loopback debugging', {skip:process.platform!=='win32'},async t=>{
   const root=await mkdtemp(join(tmpdir(),'eva-msix-entry-'));
   const profile=join(root,'user-data');
   await mkdir(profile);await mkdir(join(root,'home'));
@@ -29,9 +30,9 @@ test('generated MSIX shortcut preserves package identity, app ID and loopback de
   const occupied=await run(`if(Get-NetTCPConnection -State Listen -LocalPort 19331 -ErrorAction SilentlyContinue){'OCCUPIED'}`);
   assert.ok(!occupied.stdout.includes('OCCUPIED'),'smoke port must be free');
   await execFile('powershell.exe',['-NoProfile','-NonInteractive','-File',fileURLToPath(new URL('../windows/shortcut.ps1',import.meta.url)),'-ShortcutDirectory',root],{env,windowsHide:true});
-  // Only the disposable link's port/profile are changed for isolation; its target
-  // and all production generation/recovery code run through the public script.
-  await run(`$link=(New-Object -ComObject WScript.Shell).CreateShortcut($env:EVA_TEST_LINK);$link.Arguments='--remote-debugging-port=19331 --remote-debugging-address=127.0.0.1 --user-data-dir="'+$env:EVA_TEST_PROFILE+'"';$link.Save();Start-Process -FilePath $env:EVA_TEST_LINK -WindowStyle Hidden`);
+  // Use the validated alias recorded by production generation, with disposable
+  // port/profile arguments, to avoid starting a production companion in a smoke test.
+  await run(`$receipt=Get-Content (Join-Path $env:APPDATA 'CodexEva\\shortcut-receipt.json') -Raw | ConvertFrom-Json;$link=(New-Object -ComObject WScript.Shell).CreateShortcut($env:EVA_TEST_LINK);$link.TargetPath=$receipt.aliasPath;$link.Arguments='--remote-debugging-port=19331 --remote-debugging-address=127.0.0.1 --user-data-dir="'+$env:EVA_TEST_PROFILE+'"';$link.Save();Start-Process -FilePath $env:EVA_TEST_LINK -WindowStyle Hidden`);
   let target;
   for(let attempt=0;attempt<80;attempt++){
     const candidate=await findCodexTarget({port:19331,timeoutMs:200});
