@@ -43,7 +43,7 @@ test('深色人物显示清晰加粗的红线，浅色人物与背景强度开�
   } finally { await harness.close(); }
 });
 
-test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前输入区', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
+test('装饰跟随可见工作台，避开侧栏和隐藏旧输入框，当前输入区仍可操作', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
   const harness=await openPage();
   try {
     const shellFixture=await readFile(new URL('./fixtures/workbench-shell.html',import.meta.url),'utf8');
@@ -63,7 +63,7 @@ test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前�
       const label=`${width}px, side panel ${panel}`;
       assert.ok(Math.abs(layout.root.left-layout.main.left)<1,`overlay starts at visible workbench: ${label}`);
       assert.ok(layout.root.right<=layout.main.right+1,`overlay ends at workbench: ${label}`);
-      assert.ok(layout.root.bottom<=layout.composer.top,`overlay leaves composer clear: ${label}`);
+      assert.ok(Math.abs(layout.root.bottom-layout.main.bottom)<1,`overlay follows full workbench height: ${label}`);
       assert.ok(layout.portrait.width>layout.root.width*.3,`portrait uses the large reference composition: ${label}`);
       assert.ok(layout.portrait.height>layout.root.height*.8 || layout.portrait.width>layout.root.width*.5,`portrait scales to available height or narrow width: ${label}`);
       assert.ok(layout.geometry.width>layout.root.width*.4,`unit artwork stays large: ${label}`);
@@ -84,6 +84,25 @@ test('装饰跟随可见工作台，避开侧栏、隐藏旧输入框和当前�
     }
     await harness.evaluate('window.__codexEva.dispose()');
     assert.equal(await harness.evaluate(`document.querySelector('${ROOT}')`),null);
+  } finally { await harness.close(); }
+});
+
+test('chat 首页居中输入框不会压缩人物和仪表，切换到底部输入框时布局保持稳定', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
+  const harness=await openPage();
+  try {
+    await harness.resize(1800,1000);
+    const html=await readFile(new URL('./fixtures/workbench-shell.html',import.meta.url),'utf8');
+    await harness.setHtml(html);
+    await harness.evaluate(`document.querySelector('form').style.cssText='position:absolute;top:42%;left:600px;width:700px';window.__EVA_ASSETS__={};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
+    const measure=()=>harness.evaluate(`(()=>{const root=document.querySelector('${ROOT}');const box=e=>{const b=e.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height}};return {root:box(root),main:box(document.querySelector('#active-workbench')),portrait:box(root.shadowRoot.querySelector('.portrait')),rail:box(root.shadowRoot.querySelector('.rail'))}})()`);
+    const home=await measure();
+    assert.ok(Math.abs(home.root.bottom-home.main.bottom)<1,'centered composer must not cut the workbench in half');
+    assert.ok(home.portrait.height>home.main.height*.8,'portrait retains full workbench scale');
+    assert.equal(await harness.evaluate(hitTest('#visible-editor')),'hit','centered composer remains clickable');
+    await harness.evaluate(`document.querySelector('form').style.cssText='';new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
+    const chat=await measure();
+    assert.deepEqual(chat,home,'moving the composer must not move or shrink the skin');
+    assert.equal(await harness.evaluate(hitTest('#visible-editor')),'hit','bottom composer remains clickable');
   } finally { await harness.close(); }
 });
 

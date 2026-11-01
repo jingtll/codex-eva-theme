@@ -115,17 +115,19 @@
     const surface=input?.closest('main,[role="main"]')||[...document.querySelectorAll('main,[role="main"]')].filter(visible).sort((a,b)=>a.getBoundingClientRect().width*a.getBoundingClientRect().height-b.getBoundingClientRect().width*b.getBoundingClientRect().height)[0];
     root.dataset.surface=surface||input?'ready':'missing';
     if(!surface&&!input)return;
-    const composer=input?.closest('form,[data-composer-body],.composer')||input;
     const bounds=(surface||document.documentElement).getBoundingClientRect();
     const top=Math.max(0,bounds.top),left=Math.max(0,bounds.left),right=Math.min(innerWidth,bounds.right);
-    const bottom=Math.max(top,Math.min(innerHeight,bounds.bottom,composer?composer.getBoundingClientRect().top-12:innerHeight));
+    // Chat's start screen centers its composer. It must not become the bottom
+    // edge of the entire skin: that shrinks the portrait and clips the rail.
+    // Decorative layers pass pointer events through to the host input.
+    const bottom=Math.max(top,Math.min(innerHeight,bounds.bottom));
     // Neutralize an inherited host CSS zoom: the measured bounds are already
     // viewport coordinates. Native page zoom instead changes innerWidth itself.
     const zoom=String(1/(Number(getComputedStyle(document.body).zoom)||1));
     if(root.style.zoom!==zoom)root.style.zoom=zoom;
     const inset=`${top}px ${Math.max(0,innerWidth-right)}px ${Math.max(0,innerHeight-bottom)}px ${left}px`;
     if(root.style.inset!==inset)root.style.inset=inset;
-    const targets=[surface,composer].filter(Boolean);
+    const targets=[surface].filter(Boolean);
     if(targets.length!==layoutTargets.length||targets.some((target,index)=>target!==layoutTargets[index])){
       layoutResize.disconnect();layoutTargets=targets;targets.forEach(target=>layoutResize.observe(target));
     }
