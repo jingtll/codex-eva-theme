@@ -15,7 +15,7 @@ async function mount(harness, { theme = 'dark', assets = {} } = {}) {
   await harness.evaluate(`window.__EVA_ASSETS__=${JSON.stringify(assets)};window.__EVA_CSS__=${JSON.stringify(skinCss)};${skinJs}`);
 }
 
-test('深色人物显示清晰加粗的红线，浅色人物与背景强度开关保持原有行为', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
+test('深色人物保留红色并与浅色使用相同线宽，背景强度开关保持原有行为', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async () => {
   const harness=await openPage();
   const line=color=>'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><path d="M150 20V380" stroke="${color}" stroke-width="2"/></svg>`);
   try {
@@ -33,8 +33,8 @@ test('深色人物显示清晰加粗的红线，浅色人物与背景强度开�
     const plain=await redPixels();
     assert.ok(plain>100,'plain reference stroke is visible');
     await harness.evaluate(`${shadow('.portrait')}.src=${JSON.stringify(line('black'))};${shadow('.portrait')}.style.removeProperty('filter');${shadow('.portrait')}.style.removeProperty('opacity')`);
-    const bold=await redPixels();
-    assert.ok(bold>plain*1.35,`dark portrait has clear, thicker red ink (${bold} versus ${plain} reference pixels)`);
+    const dark=await redPixels();
+    assert.ok(Math.abs(dark-plain)<=Math.max(2,plain*.02),`dark recolouring preserves the original stroke width (${dark} versus ${plain} reference pixels)`);
     await harness.evaluate('document.documentElement.dataset.theme="light";new Promise(r=>requestAnimationFrame(r))');
     assert.equal(await harness.evaluate(`Number(getComputedStyle(${shadow('.portrait')}).opacity)`),0.18,'light portrait retains its original strength');
     await harness.evaluate('document.documentElement.dataset.theme="dark";new Promise(r=>requestAnimationFrame(r))');
