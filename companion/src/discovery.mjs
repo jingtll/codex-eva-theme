@@ -189,7 +189,9 @@ function isLoopbackEndpoint(endpoint) {
  * or plugin iframes. Returns a status instead of throwing on unreachable ports.
  */
 export const WORKBENCH_STATE_EXPRESSION = `({
-  workbench:!!window.electronBridge&&[...document.querySelectorAll('[contenteditable="true"],textarea[placeholder]')].some(e=>{const b=e.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(e).visibility!=='hidden'}),
+  // Native destinations share the main surface, including settings without a
+  // composer. Keep the session on that window; the skin owns page visibility.
+  workbench:!!window.electronBridge&&[...document.querySelectorAll('[data-app-shell-main-surface],[contenteditable="true"],textarea[placeholder]')].some(e=>{const b=e.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(e).visibility!=='hidden'}),
   visible:document.visibilityState==='visible',focused:document.hasFocus()
 })`;
 

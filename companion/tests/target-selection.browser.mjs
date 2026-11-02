@@ -36,6 +36,15 @@ test('theme stays on the visible workbench across target reordering and window c
   for(let i=0;i<100&&discoveries<before+3;i++)await new Promise(r=>setTimeout(r,20));
   assert.ok(discoveries>=before+3,'several real discovery cycles completed');
   assert.equal(await mounted(visible),true,'theme survives repeated reordered inventories');
+  // Settings replaces the composer while the hidden renderer still has one.
+  // Exercise real discovery over several poll cycles, not only the skin script.
+  await visible.evaluate(`document.querySelector('textarea').remove();const nav=document.createElement('nav');nav.innerHTML='<input id="settings-search">';const main=document.createElement('main');main.setAttribute('data-app-shell-main-surface','default');main.style.cssText='height:600px;width:800px';document.body.append(nav,main)`);
+  const settingsCycle=discoveries;
+  for(let i=0;i<100&&discoveries<settingsCycle+4;i++)await new Promise(r=>setTimeout(r,20));
+  assert.ok(discoveries>=settingsCycle+4,'settings survives multiple discovery polls');
+  assert.equal(await mounted(visible),true,'visible settings must retain its session without a composer');
+  assert.equal(await mounted(hidden),false,'hidden composer must not take over from settings');
+  assert.equal(await visible.evaluate('document.querySelector("#codex-eva-root").hidden'),false,'settings skin stays visible');
   await setVisible(hidden,true);await setVisible(visible,false);
   for(let i=0;i<100&&!await mounted(hidden);i++)await new Promise(r=>setTimeout(r,20));
   assert.equal(await mounted(hidden),true,'switching the visible window transfers the skin');
