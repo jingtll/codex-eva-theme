@@ -56,7 +56,8 @@
   }
   function theme() {
     pilot = document.documentElement.dataset.theme==='light' ? 'rei' : 'asuka';
-    root.dataset.pilot=pilot;document.documentElement.dataset.evaPilot=pilot;
+    root.dataset.pilot=pilot;
+    if(root.dataset.surface==='ready')document.documentElement.dataset.evaPilot=pilot;
     text('[data-name]',pilot==='asuka'?'惣流 · 明日香':'绫波丽');
     $('.geometry').innerHTML=unitArtwork[pilot];
     $('.portrait').src=assets[pilot+'Portrait']||'';$('.portrait').style.visibility=assets[pilot+'Portrait']?'visible':'hidden';
@@ -102,19 +103,37 @@
     // A hidden root would otherwise keep covering the page: an element with
     // display:none still receives hit tests, and inside a shadow tree the hit
     // reports the host, so the host page's clicks would be swallowed.
-    root.hidden=!!document.querySelector('dialog[open], [aria-modal="true"][role="dialog"]');
-    root.style.pointerEvents=root.hidden?'none':'';
+    const hidden=root.dataset.surface!=='ready'||[...document.querySelectorAll('dialog[open], [aria-modal="true"][role="dialog"]')].some(visible);
+    if(root.hidden!==hidden)root.hidden=hidden;
+    const pointerEvents=hidden?'none':'';
+    if(root.style.pointerEvents!==pointerEvents)root.style.pointerEvents=pointerEvents;
+  }
+  function visible(element){
+    const b=element.getBoundingClientRect();
+    return b.width>0&&b.height>0&&getComputedStyle(element).visibility!=='hidden';
   }
   let layoutFrame=0,layoutTargets=[];
   const layoutResize=new ResizeObserver(queueLayout);
   function queueLayout(){if(!disposed&&!layoutFrame)layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;layout();});}
   function layout(){
     if(disposed)return;
-    const visible=element=>{const b=element.getBoundingClientRect();return b.width>0&&b.height>0&&getComputedStyle(element).visibility!=='hidden';};
     const input=[...document.querySelectorAll('[contenteditable="true"],textarea[placeholder]')].find(visible);
-    const surface=input?.closest('main,[role="main"]')||[...document.querySelectorAll('main,[role="main"]')].filter(visible).sort((a,b)=>a.getBoundingClientRect().width*a.getBoundingClientRect().height-b.getBoundingClientRect().width*b.getBoundingClientRect().height)[0];
-    root.dataset.surface=surface||input?'ready':'missing';
-    if(!surface&&!input)return;
+    const isSettings=[...document.querySelectorAll('#settings-search,[data-settings-panel-slug][aria-current="page"]')].some(visible);
+    const navigation=document.querySelector('[data-app-navigation-rail]');
+    const isHome=navigation
+      ? [...navigation.querySelectorAll('[data-sidebar-destination="builtin:home"][aria-current="page"]')].some(visible)
+      : !!input;
+    const allowed=isSettings||isHome;
+    const nativeSurface=[...document.querySelectorAll('[data-app-shell-main-surface]')].find(visible);
+    const surface=nativeSurface||input?.closest('main,[role="main"]')||[...document.querySelectorAll('main,[role="main"]')].filter(visible).sort((a,b)=>a.getBoundingClientRect().width*a.getBoundingClientRect().height-b.getBoundingClientRect().width*b.getBoundingClientRect().height)[0];
+    root.dataset.surface=allowed&&(surface||input)?'ready':'missing';
+    if(root.dataset.surface==='ready')document.documentElement.dataset.evaPilot=pilot;
+    else delete document.documentElement.dataset.evaPilot;
+    hostModal();
+    if(root.dataset.surface!=='ready'){
+      layoutResize.disconnect();layoutTargets=[];
+      return;
+    }
     const bounds=(surface||document.documentElement).getBoundingClientRect();
     const top=Math.max(0,bounds.top),left=Math.max(0,bounds.left),right=Math.min(innerWidth,bounds.right);
     // Chat's start screen centers its composer. It must not become the bottom
@@ -133,7 +152,7 @@
     }
   }
   const layoutMutations=new MutationObserver(queueLayout);
-  layoutMutations.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','style']});
+  layoutMutations.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class','style','aria-current','data-selected']});
   window.addEventListener('resize',queueLayout);
   function click(event) {
     const action=event.target.closest('[data-action]')?.dataset.action;
