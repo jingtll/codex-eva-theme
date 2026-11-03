@@ -36,6 +36,8 @@ test('download archive contains a runnable companion and no local installation d
   assert.match(await buildBundle(), /data:image\/png;base64,/);
   const { selectAdapter, MCP_VIEW_V1 } = await import(pathToFileURL(join(root, 'companion/src/adapters/index.mjs')));
   assert.equal(selectAdapter({ fingerprint: MCP_VIEW_V1.fingerprints[0], probeRecord: await readFile(join(root, 'docs/validation/entry-probe.md'), 'utf8') }).status, 'verified');
+  execFileSync(process.execPath, ['tools/build.mjs', '--check'], { cwd: root, stdio: 'pipe' });
+  execFileSync(process.execPath, ['tools/verify.mjs'], { cwd: root, stdio: 'pipe' });
   execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', join(root, 'companion/windows/build-launcher.ps1')], { stdio: 'pipe' });
   const again = (() => {
     try { execFileSync(process.execPath, ['tools/package-release.mjs', '--output', output], { cwd: new URL('../', import.meta.url), stdio: 'pipe' }); }

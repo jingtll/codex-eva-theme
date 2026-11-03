@@ -21,7 +21,7 @@ try {
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
   const files = tracked.filter(path =>
     ['README.md', 'QUICKSTART.md', 'LICENSE', 'package.json', 'companion/package.json', 'companion/README.md', 'companion/NOTICE.md'].includes(path) ||
-    /^(share|themes)\//.test(path) ||
+    /^(share|themes|tools)\//.test(path) ||
     /^companion\/(src|client|assets|windows)\//.test(path) ||
     /^docs\/(validation|release)\//.test(path));
   for (const required of ['QUICKSTART.md', 'companion/src/main.mjs', 'docs/validation/entry-probe.md']) {
@@ -30,7 +30,7 @@ try {
   const manifest = {
     version: pkg.version,
     sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-    sourceTreeDirty: Boolean(execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root, encoding: 'utf8' }).trim()),
+    sourceTreeDirty: Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()),
     assetAuthorization: 'pending',
     cleanMachineAcceptance: 'pending',
     files: [],
