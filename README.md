@@ -4,6 +4,14 @@
 
 仓库提供两种使用方式：下面的外观主题通过宿主设置导入；[Windows 伴随程序](companion/README.md) 提供角色立绘、仪表、媒体控制与提示音。配置一次 EVA 快捷方式后，点击时同时启动伴随程序与官方 Codex，不依赖开机自启；使用条件与验收边界见其说明。
 
+## 下载与快速上手
+
+完整 Windows 测试包目前仅准备草稿 Release，素材再分发依据与干净电脑验收尚待完成，暂不提供公开成品下载。[Releases](https://github.com/jingtll/codex-eva-theme/releases) 中的自动源码 ZIP 不等同于经过验收的安装包。
+
+已有仓库或测试包的使用方式见 [快速上手](QUICKSTART.md)。完整皮肤要求官方 Codex、Node.js 22+、Windows PowerShell 5.1 和 Windows 自带的 .NET Framework 编译器；只使用下方配色分享串无需运行伴随程序。
+
+维护者在 Windows 使用 `npm run release:pack` 生成 ZIP 与 SHA-256，输出到 `dist/releases/<版本>/`。构建只选取 Git 已跟踪的运行文件；新增文件应先加入 Git。已有输出目录会拒绝覆盖。包内清单记录源提交、工作区是否有改动与逐文件摘要；上传版本必须从干净工作区构建。发布检查见 [测试版说明](docs/release/v0.1.0-beta.1.md)。
+
 ```sh
 npm run build    # 从 themes/ 生成分享串与配置片段
 npm test         # 一致性检查 + schema/对比度校验
