@@ -12,6 +12,8 @@ const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 if (!/^\d+\.\d+\.\d+-beta\.\d+$/.test(pkg.version)) throw new Error('Expected a beta version.');
 const name = `codex-eva-theme-v${pkg.version}-windows`;
 const output = resolve(values.output ?? join(root, 'dist', 'releases', pkg.version));
+// Snapshot source state before an unignored custom output can change it.
+const sourceTreeDirty = Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim());
 // Never replace an existing artifact or delete a caller-provided directory.
 await mkdir(dirname(output), { recursive: true });
 await mkdir(output, { recursive: false });
@@ -30,7 +32,7 @@ try {
   const manifest = {
     version: pkg.version,
     sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
-    sourceTreeDirty: Boolean(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim()),
+    sourceTreeDirty,
     assetAuthorization: 'pending',
     cleanMachineAcceptance: 'pending',
     files: [],
