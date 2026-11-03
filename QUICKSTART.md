@@ -1,8 +1,8 @@
-# Windows 测试版使用说明
+# Windows v0.1.0 使用说明
 
 这是第三方 EVA 主题与伴随程序，不是 Codex 官方插件或独立客户端。
 
-当前包用于草稿验收，素材公开再分发授权与干净电脑验收尚未完成，请勿转发。
+正式版下载：[GitHub Releases](https://github.com/jingtll/codex-eva-theme/releases/latest)。干净电脑与完整真实功能验收尚未完成，适用范围见下文；第三方素材授权记录见 `companion/NOTICE.md`，不适用代码 MIT 许可。
 
 ## 只使用配色
 
@@ -28,7 +28,7 @@
 在 ZIP 所在目录运行：
 
 ```powershell
-Get-FileHash .\codex-eva-theme-v0.1.0-beta.1-windows.zip -Algorithm SHA256
+Get-FileHash .\codex-eva-theme-v0.1.0-windows.zip -Algorithm SHA256
 ```
 
 将结果与随包的 `SHA256SUMS.txt` 对比。解压后的 `release-manifest.json` 记录源提交和每个运行文件的摘要。

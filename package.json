@@ -1,6 +1,6 @@
 {
   "name": "codex-eva-theme",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Codex EVA 配色主题与 Windows 工作台伴随程序",

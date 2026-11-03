@@ -9,7 +9,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const { values } = parseArgs({ options: { output: { type: 'string' } } });
 if (process.platform !== 'win32') throw new Error('Release packaging requires Windows PowerShell 5.1.');
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-if (!/^\d+\.\d+\.\d+-beta\.\d+$/.test(pkg.version)) throw new Error('Expected a beta version.');
+if (!/^\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(pkg.version)) throw new Error('Expected a stable or beta version.');
 const name = `codex-eva-theme-v${pkg.version}-windows`;
 const output = resolve(values.output ?? join(root, 'dist', 'releases', pkg.version));
 // Snapshot source state before an unignored custom output can change it.
