@@ -25,7 +25,7 @@ test('download archive contains a runnable companion and no local installation d
   const root = join(unpacked, archive.slice(0, -4));
   const manifest = JSON.parse(await readFile(join(root, 'release-manifest.json'), 'utf8'));
   assert.equal(manifest.assetAuthorization, 'pending');
-  for (const path of ['companion/src/main.mjs', 'companion/windows/ClickLauncher.cs', 'companion/windows/shortcut.ps1', 'companion/assets/audio/rei-voice-complete.mp3', 'docs/validation/entry-probe.md', 'share/share-asuka-dark.txt', 'QUICKSTART.md', 'LICENSE']) {
+  for (const path of ['companion/src/main.mjs', 'companion/windows/ClickLauncher.cs', 'companion/windows/shortcut.ps1', 'companion/assets/audio/rei-voice-complete.mp3', 'docs/validation/entry-probe.md', 'docs/theme-tokens.md', 'docs/screenshots/codex-asuka-dark.png', 'docs/screenshots/codex-rei-light.png', 'docs/screenshots/codex-display-settings.png', 'docs/screenshots/README.md', 'share/share-asuka-dark.txt', 'QUICKSTART.md', 'LICENSE']) {
     assert.ok(manifest.files.some(file => file.path === path), `missing ${path}`);
   }
   assert.ok(!manifest.files.some(file => /(^|\/)(\.git|\.cache|build|node_modules|dsh-plugin-eva-theme)(\/|$)|\.lnk$|receipt.*\.json$/.test(file.path)));

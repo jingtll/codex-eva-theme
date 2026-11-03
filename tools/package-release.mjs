@@ -22,10 +22,10 @@ try {
   const destination = join(staging, name);
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
   const files = tracked.filter(path =>
-    ['README.md', 'QUICKSTART.md', 'LICENSE', 'package.json', 'companion/package.json', 'companion/README.md', 'companion/NOTICE.md'].includes(path) ||
+    ['README.md', 'QUICKSTART.md', 'LICENSE', 'package.json', 'companion/package.json', 'companion/README.md', 'companion/NOTICE.md', 'docs/theme-tokens.md'].includes(path) ||
     /^(share|themes|tools)\//.test(path) ||
     /^companion\/(src|client|assets|windows)\//.test(path) ||
-    /^docs\/(validation|release)\//.test(path));
+    /^docs\/(validation|release|screenshots)\//.test(path));
   for (const required of ['QUICKSTART.md', 'companion/src/main.mjs', 'docs/validation/entry-probe.md']) {
     if (!files.includes(required)) throw new Error(`Required release file must be tracked: ${required}`);
   }
