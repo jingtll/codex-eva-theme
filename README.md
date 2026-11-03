@@ -8,9 +8,9 @@
 
 深色明日香，浅色绫波丽。角色线稿、机体纹样与工作台仪表随外观切换，配合 Windows 媒体控制和任务提示音。
 
-**v0.1.0-beta.1 · Windows 预览 · 完整下载包保持草稿**
+**v0.1.0 · Windows 正式版**
 
-[实图展示](#双驾驶员实图展示) · [快速上手](QUICKSTART.md) · [组件与个性化](#组件与个性化) · [发布状态](#当前状态) · [问题反馈](https://github.com/jingtll/codex-eva-theme/issues)
+[下载正式版](https://github.com/jingtll/codex-eva-theme/releases/latest) · [实图展示](#双驾驶员实图展示) · [快速上手](QUICKSTART.md) · [组件与个性化](#组件与个性化) · [问题反馈](https://github.com/jingtll/codex-eva-theme/issues)
 
 </div>
 
@@ -62,9 +62,11 @@
 
 ## 当前状态
 
-截至 2026-11-03，`v0.1.0-beta.1` 已准备完整 Windows 测试包与 SHA-256 校验文件，GitHub Release **保持草稿，尚未公开下载**。素材公开再分发依据与干净 Windows 环境验收仍待完成，完整包暂不作为正式发行版提供。
+`v0.1.0` 是本项目首个正式发布版本。前往 [GitHub Releases](https://github.com/jingtll/codex-eva-theme/releases/latest) 下载 `codex-eva-theme-v0.1.0-windows.zip` 和 `SHA256SUMS.txt`，完整解压后按 [快速上手](QUICKSTART.md) 配置。
 
-当前测试基线位于 `chore/github-beta-release` 分支，包含工作台定位、深色线稿笔触与页面可见性修复；默认分支 `main` 尚未包含这批修复。下方源码试用命令明确使用测试分支。发布范围见 [测试版说明](docs/release/v0.1.0-beta.1.md)。
+默认分支 `main` 包含工作台定位、深色线稿笔触、页面可见性、发布工具与实图文档更新。也可从下方源码命令获取。功能、依赖和已知限制见 [v0.1.0 发布说明](docs/release/v0.1.0.md)。
+
+干净电脑与完整真实功能验收仍待补齐；第三方素材的公开再分发条款尚未完整归档，代码 MIT 许可不覆盖这些素材。正式版不扩大已验证范围，详见 [验证记录](docs/validation/2026-11-03-stable-release.md) 与 [NOTICE](companion/NOTICE.md)。
 
 GitHub 自动生成的 `Source code (zip)` 是指定提交的源码快照，不等同于已通过安装验收的成品包。
 
@@ -104,10 +106,10 @@ GitHub 自动生成的 `Source code (zip)` 是指定提交的源码快照，不�
 
 ### 获取与首次配置
 
-当前完整包保持草稿，维护者验收可使用源码测试分支。安装 Git 后运行：
+推荐下载 [正式版 ZIP](https://github.com/jingtll/codex-eva-theme/releases/latest) 并完整解压。也可安装 Git 后获取源码：
 
 ```powershell
-git clone --branch chore/github-beta-release https://github.com/jingtll/codex-eva-theme.git
+git clone https://github.com/jingtll/codex-eva-theme.git
 cd codex-eva-theme
 ```
 
@@ -129,7 +131,7 @@ powershell.exe -NoProfile -File .\companion\windows\shortcut.ps1 -ShortcutDirect
 
 - **启动流程**：点击入口同时补启伴随程序与官方客户端，不再把登录自启作为日常使用前提。
 - **工作台布局**：装饰跟随主工作区，深色人物保留红色及原线宽；设置页无需输入框也能保持皮肤。
-- **发布准备**：完整测试包、逐文件清单、SHA-256 与中文使用说明已准备，公开发布仍等待素材授权核实和干净电脑验收。
+- **首个正式发布**：提供完整 Windows ZIP、逐文件清单、SHA-256 与中文使用说明，保留已知限制与待验收事项。
 - **展示文档**：补充本项目真实客户端的双角色与设置面板实图，并明确上游来源。
 
 ## 升级、暂停与卸载
@@ -184,7 +186,7 @@ node .\companion\src\diagnose.mjs
 
 ## 开发与文档
 
-[快速上手](QUICKSTART.md) · [伴随程序机制](companion/README.md) · [主题令牌](docs/theme-tokens.md) · [验证记录](docs/validation/2026-11-03-beta-release.md) · [素材来源](companion/NOTICE.md)
+[快速上手](QUICKSTART.md) · [伴随程序机制](companion/README.md) · [主题令牌](docs/theme-tokens.md) · [验证记录](docs/validation/2026-11-03-stable-release.md) · [素材来源](companion/NOTICE.md)
 
 <details>
 <summary>开发、主题构建与验证命令</summary>
@@ -208,7 +210,7 @@ npm run test:browser --prefix companion
 
 请使用独立浏览器资料与测试端口。真实 MSIX 入口专项通过 `npm run test:msix-entry --prefix companion` 显式执行，不包含在普通契约测试中。
 
-2026-11-03 记录的结果：伴随程序 103 项通过、1 项符号链接权限跳过；浏览器回归 12 项通过；主题与打包检查通过。自动化检查不替代干净电脑安装、真实升级/卸载、Windows 重启、真实媒体与额度、桌宠兼容性及安全软件接受度验收。详见 [测试版验证记录](docs/validation/2026-11-03-beta-release.md) 与 [验收范围](docs/validation/acceptance.md)。
+2026-11-03 正式版验证：伴随程序 103 项通过、1 项符号链接权限跳过；浏览器回归 12 项通过；主题与正式版 ZIP 检查通过。自动化检查不替代干净电脑安装、真实升级/卸载、Windows 重启、真实媒体与额度、桌宠兼容性及安全软件接受度验收。详见 [正式版验证记录](docs/validation/2026-11-03-stable-release.md) 与 [验收范围](docs/validation/acceptance.md)。
 
 </details>
 
@@ -248,7 +250,7 @@ companion/
   tests/                契约、浏览器与 Windows 专项回归
   NOTICE.md             素材来源、分发边界与摘要
 docs/                   主题映射、设计决策、验证与发布说明
-QUICKSTART.md           Windows 测试版使用说明
+QUICKSTART.md           Windows 正式版使用说明
 LICENSE                 本仓库代码许可
 ```
 
@@ -275,4 +277,4 @@ LICENSE                 本仓库代码许可
 
 再次感谢 [seaison/dsh-plugin-eva-theme](https://github.com/seaison/dsh-plugin-eva-theme) 及其作者。本仓库的 Codex 适配建立在原项目的主题方向与参考资源之上；请保留原项目来源与适用的许可声明。
 
-本仓库代码采用 [MIT License](LICENSE)。EVA 角色、品牌、图像与语音相关权利归相应权利人所有，代码许可不替代第三方素材授权。随包七项素材的来源与 SHA-256 见 [NOTICE](companion/NOTICE.md)；公开再分发依据核实完成前，完整测试包保持草稿。
+本仓库代码采用 [MIT License](LICENSE)。EVA 角色、品牌、图像与语音相关权利归相应权利人所有，代码许可不替代第三方素材授权。随包七项素材的来源、SHA-256 及尚待补齐的授权记录见 [NOTICE](companion/NOTICE.md)。
