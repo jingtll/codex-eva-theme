@@ -9,7 +9,7 @@ export const MCP_VIEW_V1 = Object.freeze({
   id: 'mcp-view-1',
   // Resource-fingerprint values this contract was verified against. Adding a
   // fingerprint requires a new probe run recorded in docs/validation/.
-  fingerprints: Object.freeze(['2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1']),
+  fingerprints: Object.freeze(['2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1', 'a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda']),
   origin: 'app://-',
   // Verified: responses arrive as window "message" events with type mcp-response.
   transport: 'window-message',

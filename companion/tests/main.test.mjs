@@ -21,7 +21,7 @@ async function waitFor(predicate, { timeoutMs = 500 } = {}) {
 
 const stopSounds = async () => 0;
 const FAKE_TARGET = { id: 'main', webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/page/main' };
-const VERIFIED_FINGERPRINT = '2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1';
+const VERIFIED_FINGERPRINT = 'a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda';
 const PROBE_RECORD = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'validation', 'entry-probe.md');
 
 async function settingsFile(t) {

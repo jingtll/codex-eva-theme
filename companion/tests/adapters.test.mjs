@@ -61,3 +61,11 @@ test('the verified adapter only ever issues methods it declares', () => {
   }
   assert.equal(adapter.origin, 'app://-');
 });
+
+test('2026-11-04 probed Codex resources select the event contract', () => {
+  const fingerprint = 'a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda';
+  const probeRecord = `当前指纹：\`${fingerprint}\``;
+  const result = selectAdapter({ fingerprint, probeRecord });
+  assert.equal(result.status, 'verified');
+  assert.equal(result.adapter.methods.quotaRead, 'account/rateLimits/read');
+});

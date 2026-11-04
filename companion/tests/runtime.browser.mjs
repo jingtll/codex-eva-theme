@@ -20,7 +20,7 @@ test('real main, session and bundle connect, reload, pause, resume and clean up 
   const messages = [];
   const runtime = await startCompanion({
     findTarget: async () => target,
-    fingerprint: '2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1',
+    fingerprint: 'a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda',
     settingsPath: join(dir, 'settings.json'), pollMs: 60000,
     createMediaBridge: () => ({read: async () => ({ok:false}), close() {}}),
     stopSounds: async () => {}, sendTray: message => messages.push(message),

@@ -24,7 +24,7 @@ test('theme stays on the visible workbench across target reordering and window c
   let discoveries=0;
   const runtime=await startCompanion({
     settingsPath:join(dir,'settings.json'),pollMs:30,
-    fingerprint:'2cde1c59f255f5828fd97b93bf31eb988134c38c3bca8ef4e16e7fc255730fb1',
+    fingerprint:'a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda',
     findTarget:options=>{discoveries++;return findCodexTarget({...options,port:19433,fetchImpl:async()=>({ok:true,json:async()=>targets})});},
     createMediaBridge:()=>({read:async()=>({ok:false}),close(){}}),stopSounds:async()=>{},sendTray:()=>{},
   });
