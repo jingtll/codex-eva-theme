@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { startCompanion } from '../src/main.mjs';
 import { openPage } from './browser-harness.mjs';
 
-test('real main, session and bundle connect, reload, pause, resume and clean up together', { skip: !process.env.EVA_BROWSER_ENDPOINT }, async t => {
+for(const fingerprint of ['a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda','a'.repeat(64)])
+test(`real runtime lifecycle for ${fingerprint.startsWith('a2cb')?'known':'unknown'} build`, { skip: !process.env.EVA_BROWSER_ENDPOINT }, async t => {
   const page = await openPage('<html data-theme="dark"><body><textarea placeholder="输入消息"></textarea></body></html>');
   t.after(() => page.close());
   const dir = await mkdtemp(join(tmpdir(), 'eva-runtime-'));
@@ -20,7 +21,7 @@ test('real main, session and bundle connect, reload, pause, resume and clean up 
   const messages = [];
   const runtime = await startCompanion({
     findTarget: async () => target,
-    fingerprint: 'a2cb0e0df4fbb5298fa62a63ec68073b50d52df01ed7b8decaa210eaf09a9bda',
+    fingerprint,
     settingsPath: join(dir, 'settings.json'), pollMs: 60000,
     createMediaBridge: () => ({read: async () => ({ok:false}), close() {}}),
     stopSounds: async () => {}, sendTray: message => messages.push(message),

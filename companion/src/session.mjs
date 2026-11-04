@@ -1,11 +1,16 @@
 import {connectCdp as defaultConnectCdp} from './cdp.mjs';
 import {classifyThread,mapNotification} from './host.mjs';
 import {normalizeQuota} from './quota.mjs';
+import {validQuota} from './compatibility.mjs';
 
-export async function attachSession(target,{bundle,media,notifier,getSettings,setSettings,playCue,onStatus=()=>{},onReload=()=>{},connectCdp=defaultConnectCdp}){
+export async function attachSession(target,{bundle,media,notifier,getSettings,setSettings,playCue,onStatus=()=>{},onReload=()=>{},onCapabilities=()=>{},runtimeProbe=false,cachedCapabilities={},connectCdp=defaultConnectCdp}){
   const cdp=await connectCdp(target.webSocketDebuggerUrl,{timeoutMs:10000});
   let scriptId,disposed=false,visible=false,quota=null,pilot='asuka',sampling=false,mediaGeneration=0;
   let mounted=false,quotaStatus='待验证',eventStatus='待验证',lastStatus='';
+  let protocolConfirmed=!runtimeProbe;
+  const observed={};
+  function capability(patch){for(const [key,value]of Object.entries(patch)){if(observed[key]!==value){observed[key]=value;onCapabilities({[key]:value});}}}
+  if(runtimeProbe){quotaStatus=cachedCapabilities?.quota?'上次可用，待复核':'自动检测中';eventStatus='待观测，静默';}
   function reportStatus(){
     const text=`连接成功 · ${mounted?'皮肤已加载':'等待工作台'} · 额度${quotaStatus} · 事件${eventStatus}`;
     if(text!==lastStatus){lastStatus=text;onStatus(text);}
@@ -28,7 +33,7 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
     evaluate(`window.__EVA_SETTINGS__=${JSON.stringify(getSettings())};window.__evaInstall?.(window.__EVA_SETTINGS__)`).catch(()=>{});
     onReload();
   });
-  const offDestroyed=cdp.on('Runtime.executionContextsCleared',()=>{contextId=null;sources.clear();quota=null;});
+  const offDestroyed=cdp.on('Runtime.executionContextsCleared',()=>{contextId=null;sources.clear();quota=null;protocolConfirmed=!runtimeProbe;quotaStatus='待验证';eventStatus=runtimeProbe?'待观测，静默':'待验证';});
   const evaluate=async expression=>{
     if(disposed)return;
     const result=await cdp.send('Runtime.evaluate',{expression,returnByValue:true,...contextId?{contextId}:{}});
@@ -49,16 +54,25 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
   }
   async function host(value){
     if(closing||disposed)return;
-    if(value.type==='quota'){quota=normalizeQuota(value.payload);quotaStatus=quota.buckets.length?'已联动':'暂不可用';reportStatus();await update({quota,stale:false,status:'已连接'});}
+    if(value.type==='compatibility'&&value.protocol===true){protocolConfirmed=true;capability({protocol:true});return;}
+    if(runtimeProbe&&!protocolConfirmed&&['quota','thread-source','notification','account-changed'].includes(value.type))return;
+    if(value.type==='quota'){
+      if(!validQuota(value.payload)){quota=null;quotaStatus='格式不兼容，已停用';capability({quota:false});reportStatus();await update({quota:null,stale:false,status:'额度格式不兼容'});return;}
+      quota=normalizeQuota(value.payload);quotaStatus='已联动';capability({quota:true});reportStatus();await update({quota,stale:false,status:'已连接'});}
     else if(value.type==='account-changed'){quota=null;quotaStatus='待验证';eventStatus='待验证';sources.clear();reportStatus();await update({quota:null,stale:false,status:'账户已变化'});}
-    else if(value.type==='quota-error'){quotaStatus='暂不可用';reportStatus();await update({stale:!!quota,status:'额度暂不可用'});}
+    else if(value.type==='quota-error'){quotaStatus='暂不可用';capability({quota:false});reportStatus();await update({stale:!!quota,status:'额度暂不可用'});}
     else if(value.type==='thread-source'&&typeof value.threadId==='string'&&typeof value.hostId==='string'){
       const key=`${value.hostId}/${value.threadId}`;
       const classification=classifyThread(value.source);
       if(classification!==null){sources.set(key,classification);if(sources.size>2000)sources.delete(sources.keys().next().value);}
       else {sources.delete(key);eventStatus='兼容受限：未知聊天来源';reportStatus();}
     }else if(value.type==='notification'){
-      const event=mapNotification(value,sources);const reminder=event&&notifier.accept(event);
+      const event=mapNotification(value,sources);
+      const valid=event&&[event.hostId,event.threadId,event.turnId].every(id=>typeof id==='string'&&id.length>0)&&
+        (event.type==='approval'||event.status==='completed');
+      if(!valid)return;
+      if(event.isSubagent===false)capability({events:true});
+      const reminder=notifier.accept(event);
       if(event){eventStatus='已观测（覆盖待验收）';reportStatus();}
       if(reminder)await cue(reminder.kind);
     }
@@ -90,6 +104,7 @@ export async function attachSession(target,{bundle,media,notifier,getSettings,se
     async tick(){
       const view=await evaluate('({visible:document.visibilityState==="visible",mounted:!!window.__codexEva})');
       mounted=view===true||view?.mounted===true;visible=mounted&&(view===true||view?.visible===true);
+      capability({appearance:mounted});
       reportStatus();await sampleMedia();
     },
     get reloads(){return reloads;},

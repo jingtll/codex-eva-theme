@@ -344,13 +344,14 @@ test('the default discovery is asked for the configured debugging port', async (
   await instance.stop();
 });
 
-test('an unverified client fingerprint is reported and never attached', async (t) => {
+test('an unknown fingerprint attaches the skin with a runtime probe contract', async (t) => {
   const messages = [];
-  let attaches = 0;
+  let attaches = 0, host;
   const instance = await startCompanion({
     findTarget: async () => FAKE_TARGET,
     fingerprint: 'a'.repeat(64),
     probeRecordPath: PROBE_RECORD,
+    buildBundle: async (settings, adapter) => { host=adapter; return '/* bundle */'; },
     attach: async () => { attaches += 1; return { async tick() {}, async close() {} }; },
     createNotifier: () => ({ accept: () => null }),
     playCue: async () => ({ ok: true }),
@@ -360,10 +361,9 @@ test('an unverified client fingerprint is reported and never attached', async (t
     stopSounds,
   });
   t.after(() => instance.stop());
-  await waitFor(() => messages.some((m) => /未验证/.test(m.text || '')));
-  assert.equal(attaches, 0);
-  assert.ok(!messages.some((m) => m.text === '已连接'));
-  assert.match(messages.at(-1).text, /未验证/);
+  await waitFor(() => attaches === 1);
+  assert.equal(host.runtimeProbe,true);
+  assert.ok(messages.some((m) => /自动检测/.test(m.text || '')));
   await instance.stop();
 });
 
@@ -451,4 +451,19 @@ test('uninstall stop request shuts down even a paused companion and releases its
   await instance.stop();
   await assert.rejects(readFile(`${file}.lock`),/ENOENT/);
   await assert.rejects(readFile(`${file}.stop`),/ENOENT/);
+});
+
+test('automatic capabilities survive restart without storing account data',async t=>{
+  const file=await settingsFile(t),fingerprint='b'.repeat(64);
+  let host,report;
+  const options={settingsPath:file,fingerprint,pollMs:60000,stopSounds,sendTray:()=>{},findTarget:async()=>FAKE_TARGET,
+    buildBundle:async(s,h)=>{host=h;return '/* bundle */'},
+    attach:async(target,hooks)=>{report=hooks.onCapabilities;return {close:async()=>{}}}};
+  const first=await startCompanion(options);
+  t.after(()=>first.stop());report({quota:true,protocol:true,account:'never-store'});await first.stop();
+  const saved=await readFile(join(dirname(file),'compatibility.json'),'utf8');
+  assert.equal(saved.includes('never-store'),false);
+  const second=await startCompanion(options);t.after(()=>second.stop());
+  assert.equal(host.cachedCapabilities.quota,true);
+  await second.stop();
 });

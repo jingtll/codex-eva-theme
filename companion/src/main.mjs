@@ -10,6 +10,7 @@ import { createMediaBridge } from './media.mjs';
 import { playCue, stopSounds } from './sound.mjs';
 import { selectAdapter } from './adapters/index.mjs';
 import { resourceFingerprint } from './diagnose-fingerprint.mjs';
+import {runtimeAdapter,readCapabilities,recordCapabilities} from './compatibility.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const TRAY_SCRIPT = join(ROOT, 'windows', 'tray.ps1');
@@ -195,6 +196,15 @@ export async function startCompanion(options = {}) {
 
   const notifier = makeNotifier();
   let installation = null;
+  const compatibilityPath=join(dirname(settingsPath),'compatibility.json');
+  let compatibilityCache=null,cacheWrites=Promise.resolve();
+  try { compatibilityCache=await readJson(compatibilityPath); } catch { /* First run or damaged cache. */ }
+  function saveCapabilities(fingerprint,patch) {
+    if(!/^[a-f0-9]{64}$/.test(fingerprint||''))return;
+    compatibilityCache=recordCapabilities(compatibilityCache,fingerprint,patch,now());
+    const snapshot=compatibilityCache;
+    cacheWrites=cacheWrites.then(()=>writeJson(compatibilityPath,snapshot)).catch(()=>{});
+  }
 
   const publish = (message) => send(message);
 
@@ -219,14 +229,14 @@ export async function startCompanion(options = {}) {
     },
     attach: async (target) => {
       const hostAdapter = await resolveHostAdapter();
-      if (hostAdapter.status !== 'verified') {
-        publish({ type: 'status', text: hostAdapter.reason });
-        throw Object.assign(Error(hostAdapter.reason), {code:'ADAPTER_UNSUPPORTED'});
-      }
+      if (hostAdapter.status !== 'verified') publish({type:'status',text:'新版本自动检测 · 外观独立加载 · 额度与事件待验证'});
       const media = makeMedia();
       let session;
       try { session = await attachImpl(target, {
         bundle: await buildBundleImpl(settings, hostAdapter.adapter),
+        runtimeProbe: hostAdapter.adapter.runtimeProbe===true,
+        cachedCapabilities: hostAdapter.adapter.cachedCapabilities,
+        onCapabilities: patch=>saveCapabilities(hostAdapter.fingerprint,patch),
         media,
         notifier,
         getSettings: () => settings,
@@ -255,11 +265,15 @@ export async function startCompanion(options = {}) {
     let currentFingerprint = fingerprint;
     if (!currentFingerprint) {
       installation = await discover();
-      if (installation.status === 'found') currentFingerprint = await fingerprintOf(installation.asarPath);
+      if (installation.status === 'found') {
+        try { currentFingerprint = await fingerprintOf(installation.asarPath); } catch { /* Visual fallback still works. */ }
+      }
     }
     let probeRecord = '';
     try { probeRecord = await readFile(probeRecordPath, 'utf8'); } catch { probeRecord = ''; }
-    return selectAdapter({ fingerprint: currentFingerprint, probeRecord });
+    const selected=selectAdapter({ fingerprint: currentFingerprint, probeRecord });
+    if(selected.status==='verified')return selected;
+    return {...selected,adapter:runtimeAdapter(currentFingerprint,readCapabilities(compatibilityCache,currentFingerprint,now()))};
   }
 
   async function cycle() {
@@ -320,6 +334,7 @@ export async function startCompanion(options = {}) {
       sessionRef = null;
       await lifecycle.stop();
       await stopSoundsImpl();
+      await cacheWrites;
       trayChannel?.end();
       trayChannel = null;
       await exclusive.release();

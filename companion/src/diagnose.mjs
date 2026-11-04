@@ -169,6 +169,7 @@ async function diagnose() {
   const selection = selectAdapter({ fingerprint: report.fingerprint?.value, probeRecord });
   report.versionAdapter = {
     status: selection.status,
+    runtimePolicy: selection.status==='verified'?'verified-contract':'capability-probe',
     id: selection.adapter?.id ?? null,
     reason: selection.reason ?? null,
   };

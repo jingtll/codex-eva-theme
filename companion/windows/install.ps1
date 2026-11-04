@@ -93,6 +93,8 @@ if ($Uninstall) {
 
   & (Join-Path $PSScriptRoot 'shortcut.ps1') -Remove
   $SettingsPath = Join-Path $DataDir 'settings.json'
+  $CompatibilityPath = Join-Path $DataDir 'compatibility.json'
+  Remove-Item -LiteralPath $CompatibilityPath -Force -ErrorAction SilentlyContinue
   if (Test-Path -LiteralPath $SettingsPath -PathType Leaf) {
     Remove-Item -LiteralPath $SettingsPath -Force
     Write-Output '已移除皮肤偏好设置。'

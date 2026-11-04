@@ -2,8 +2,8 @@
  * Host message contract for the Codex build verified in docs/validation/entry-probe.md.
  *
  * Every method name the page relies on lives here, keyed by what it is for. A new
- * Codex build whose resources no longer match is reported as unsupported rather
- * than silently reusing these names, per the design's "版本适配器" rule.
+ * Unknown resources are not statically verified here. The runtime may use the
+ * separately gated capability probe without treating it as a verified adapter.
  */
 export const MCP_VIEW_V1 = Object.freeze({
   id: 'mcp-view-1',

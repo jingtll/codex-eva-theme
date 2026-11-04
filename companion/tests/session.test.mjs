@@ -53,6 +53,30 @@ const contextCreated = (id) => ({
   context: { id, auxData: { isDefault: true, frameId: 'main-frame' } },
 });
 
+test('runtime events stay silent before handshake and reject unknown sources and malformed quota', async()=>{
+  const cdp=fakeCdp(), cues=[], capabilities=[], statuses=[];
+  const session=await attach(cdp,{runtimeProbe:true,cachedCapabilities:{protocol:true,events:true},onCapabilities:c=>capabilities.push(c),onStatus:s=>statuses.push(s),
+    notifier:{accept:e=>e.isSubagent===false?{kind:'completed'}:null},playCue:c=>cues.push(c)});
+  cdp.emit('Runtime.executionContextCreated',contextCreated(1));
+  const send=async value=>{cdp.emit('Runtime.bindingCalled',{name:'__evaHostEvent',executionContextId:1,payload:JSON.stringify(value)});await new Promise(r=>setImmediate(r));};
+  const source={type:'thread-source',hostId:'local',threadId:'t',source:'desktop'};
+  const done={type:'notification',hostId:'local',method:'turn/completed',params:{threadId:'t',turn:{id:'v',status:'completed'}}};
+  await send(source);await send(done);assert.equal(cues.length,0);
+  await send({type:'compatibility',protocol:true});
+  await send({...source,source:'future-source'});await send(done);assert.equal(cues.length,0);
+  await send(source);await send({...done,params:{...done.params,turn:{id:'v',status:'future'}}});assert.equal(cues.length,0);
+  await send(done);assert.equal(cues.length,1);
+  await send({type:'quota',payload:{garbage:true}});
+  assert.ok(statuses.some(s=>s.includes('额度格式不兼容')));
+  assert.ok(capabilities.some(c=>c.events===true));
+  cdp.emit('Runtime.executionContextsCleared',{});
+  cdp.emit('Runtime.executionContextCreated',contextCreated(2));
+  cdp.emit('Runtime.bindingCalled',{name:'__evaHostEvent',executionContextId:2,payload:JSON.stringify(source)});
+  cdp.emit('Runtime.bindingCalled',{name:'__evaHostEvent',executionContextId:2,payload:JSON.stringify(done)});
+  await new Promise(r=>setImmediate(r));assert.equal(cues.length,1,'reload must establish transport again');
+  await session.close();
+});
+
 test('a reload re-dials the new context instead of evaluating into the destroyed one', async () => {
   const cdp = fakeCdp();
   let reloads = 0;

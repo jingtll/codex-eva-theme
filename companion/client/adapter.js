@@ -18,6 +18,7 @@
   // fingerprint; hard-coded names would only ever match one Codex build.
   const host = window.__EVA_HOST__ || {};
   const methods = host.methods || {};
+  let protocolConfirmed = host.runtimeProbe !== true;
   const approvalSuffixes = host.approvalSuffixes || ['/requestApproval', '/requestUserInput'];
 
   async function request(method, params, hostId = 'local') {
@@ -56,11 +57,12 @@
   }
 
   async function metadata(hostId, threadId) {
-    if (typeof threadId !== 'string') return;
+    if (typeof threadId !== 'string'||!threadId) return false;
     try {
       const result = await request(methods.threadRead, { threadId, includeTurns: false }, hostId);
       emit({ type: 'thread-source', hostId, threadId, source: result?.thread?.source });
-    } catch {}
+      return true;
+    } catch { return false; }
   }
 
   async function message(event) {
@@ -68,6 +70,13 @@
     const data = event.data;
     if (!data || typeof data !== 'object') return;
     if (data.type === 'mcp-response' && pending.has(data.message?.id)) {
+      // Only a correlated, structurally valid response establishes this transport.
+      const reply=data.message;
+      const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+      if(host.runtimeProbe && !(Object.hasOwn(reply,'error')!==Object.hasOwn(reply,'result') &&
+        (record(reply.error)||record(reply.result)))) return;
+      protocolConfirmed=true;
+      if(host.runtimeProbe)emit({type:'compatibility',protocol:true});
       event.stopImmediatePropagation();
       const item = pending.get(data.message.id);
       pending.delete(data.message.id);
@@ -75,8 +84,10 @@
       data.message.error ? item.reject(Error('HOST_REQUEST_FAILED')) : item.resolve(data.message.result);
       return;
     }
+    if (!protocolConfirmed) return;
     if (data.type !== 'mcp-notification' && data.type !== 'mcp-request') return;
     const method = data.method || data.request?.method;
+    if(typeof method!=='string')return;
     const params = data.params || data.request?.params || {};
     const hostId = data.hostId || 'local';
     if (method === methods.accountChanged || method === methods.loginCompleted) {
@@ -102,7 +113,7 @@
     const isApproval = approvalSuffixes.some((suffix) => method?.endsWith(suffix));
     if (method !== methods.turnCompleted && !isApproval) return;
     // Read metadata without turns. Never forward message content or tool arguments.
-    await metadata(hostId, params.threadId);
+    if(!await metadata(hostId, params.threadId))return;
     emit({
       type: 'notification', hostId, method,
       params: { threadId: params.threadId, turnId: params.turnId, turn: params.turn ? { id: params.turn.id, status: params.turn.status } : undefined },
@@ -121,6 +132,7 @@
   }
 
   async function runRefresh() {
+    if(typeof methods.quotaRead!=='string')return;
     if (stopped || inFlight) return;
     if (document.visibilityState === 'hidden') { skippedWhileHidden = true; return; }
     if (Date.now() < retryAt) { schedule(retryAt - Date.now()); return; }
@@ -188,5 +200,5 @@
       delete window.__evaQuota;
     },
   };
-  refresh();
+  if(typeof methods.quotaRead==='string')refresh();
 })();
