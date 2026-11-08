@@ -18,6 +18,13 @@ test('panel drags, persists, stays reachable after scaling and resets without dr
  assert.equal(await h.evaluate('window.__commands.some(c=>c.action==="settings"&&c.settings.panelX>=0)'),true);
  await h.evaluate(`window.__codexEva.dispose();window.__EVA_SETTINGS__=${JSON.stringify(settings)}`);await h.evaluate(await buildBundle(settings));
  assert.ok(Math.abs((await box('.rail')).x-moved.x)<2,'saved position restored');
+ const active=await box('.pilot');await h.evaluate('window.__commands=[]');
+ await h.page.send('Input.dispatchMouseEvent',{type:'mousePressed',x:active.x+50,y:active.y+12,button:'left',buttons:1,clickCount:1});
+ await h.page.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:active.x+20,y:active.y+25,buttons:1});
+ await h.evaluate('window.__codexEva.dispose()');
+ await h.page.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:active.x+20,y:active.y+25,button:'left',clickCount:1});
+ assert.equal(await h.evaluate('window.__commands.some(c=>c.action==="settings")'),false,'unmount cancels incomplete dragging');
+ await h.evaluate(`window.__EVA_SETTINGS__=${JSON.stringify(settings)}`);await h.evaluate(await buildBundle(settings));
  await h.evaluate('window.__codexEva.setSettings({scale:1.6})');await h.resize(650,450);
  await h.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
  const small=await box('.rail');assert.ok(small.x>=199&&small.y>=0&&small.right<=651&&small.bottom<=451,JSON.stringify(small));

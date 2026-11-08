@@ -143,7 +143,7 @@
   function pointerMove(event){if(drag&&event.pointerId===drag.id){movePanel(drag.left+(event.clientX-drag.x)*drag.ratioX,drag.top+(event.clientY-drag.y)*drag.ratioY);event.preventDefault();}}
   function pointerEnd(event){
     if(!drag||event.pointerId!==drag.id)return;
-    if(event.type==='pointercancel'){settings.panelX=drag.oldX;settings.panelY=drag.oldY;placePanel();}
+    if(event.type!=='pointerup'){settings.panelX=drag.oldX;settings.panelY=drag.oldY;placePanel();}
     else savePanel();
     const id=drag.id;drag=null;handle.classList.remove('dragging');if(handle.hasPointerCapture(id))handle.releasePointerCapture(id);
   }
@@ -221,6 +221,6 @@
   const modalObserver=new MutationObserver(modalTick);modalObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal']});
   const interval=setInterval(()=>{clock();if(state.quota)renderQuota();},1000);
   window.__codexEva={updateState,setSettings:patch=>applySettings(patch),openSettings:()=>{$('[data-settings]').hidden=false;modalTick();},getSettings:()=>({...settings}),getPilot:()=>pilot,
-    dispose(){if(disposed)return;disposed=true;window.removeEventListener('pointermove',pointerMove);window.removeEventListener('pointerup',pointerEnd);window.removeEventListener('pointercancel',pointerEnd);clearInterval(interval);cancelAnimationFrame(layoutFrame);layoutResize.disconnect();layoutMutations.disconnect();window.removeEventListener('resize',queueLayout);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
+    dispose(){if(disposed)return;disposed=true;drag=null;window.removeEventListener('pointermove',pointerMove);window.removeEventListener('pointerup',pointerEnd);window.removeEventListener('pointercancel',pointerEnd);clearInterval(interval);cancelAnimationFrame(layoutFrame);layoutResize.disconnect();layoutMutations.disconnect();window.removeEventListener('resize',queueLayout);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
   applySettings(settings);theme();clock();hostModal();updateState();layout();
 })();
