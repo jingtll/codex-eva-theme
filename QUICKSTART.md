@@ -1,4 +1,4 @@
-# Windows v0.2.0 使用说明
+# Windows v0.2.1 使用说明
 
 这是第三方 EVA 主题与伴随程序，不是 Codex 官方插件或独立客户端。
 
@@ -28,7 +28,7 @@
 在 ZIP 所在目录运行：
 
 ```powershell
-Get-FileHash .\codex-eva-theme-v0.2.0-windows.zip -Algorithm SHA256
+Get-FileHash .\codex-eva-theme-v0.2.1-windows.zip -Algorithm SHA256
 ```
 
 将结果与随包的 `SHA256SUMS.txt` 对比。解压后的 `release-manifest.json` 记录源提交和每个运行文件的摘要。
@@ -55,3 +55,5 @@ powershell.exe -NoProfile -File .\companion\windows\desktop.ps1 -Action Uninstal
 - 完整包尚未完成干净电脑安装、真实升级与卸载、安全软件接受度、真实媒体/额度及桌宠兼容性验收。已有本机和自动化证据见 `docs/validation/`。
 
 源码与问题反馈：[GitHub 仓库](https://github.com/jingtll/codex-eva-theme)。代码许可见 `LICENSE`，素材范围见 `companion/NOTICE.md`。
+
+面板位置：拖住右上角面板的角色标题区域移动，松手自动保存。窗口或组件缩放后会限制在工作区内；在显示设置中点击“恢复面板位置”可回到默认位置。标题区域也支持方向键移动、Home 恢复。

@@ -8,7 +8,7 @@
 
 深色明日香，浅色绫波丽。角色线稿、机体纹样与工作台仪表随外观切换，配合 Windows 媒体控制和任务提示音。
 
-**v0.2.0 · Windows 正式版**
+**v0.2.1 · Windows 正式版**
 
 [下载正式版](https://github.com/jingtll/codex-eva-theme/releases/latest) · [实图展示](#双驾驶员实图展示) · [快速上手](QUICKSTART.md) · [组件与个性化](#组件与个性化) · [问题反馈](https://github.com/jingtll/codex-eva-theme/issues)
 
@@ -62,9 +62,9 @@
 
 ## 当前状态
 
-`v0.2.0` 新增本地自动兼容与按功能降级。前往 [GitHub Releases](https://github.com/jingtll/codex-eva-theme/releases/latest) 下载 `codex-eva-theme-v0.2.0-windows.zip` 和 `SHA256SUMS.txt`，完整解压后按 [快速上手](QUICKSTART.md) 配置。
+`v0.2.1` 新增可拖动面板，包含本地自动兼容与按功能降级。前往 [GitHub Releases](https://github.com/jingtll/codex-eva-theme/releases/latest) 下载 `codex-eva-theme-v0.2.1-windows.zip` 和 `SHA256SUMS.txt`，完整解压后按 [快速上手](QUICKSTART.md) 配置。
 
-本版本包含工作台定位、深色线稿笔触、页面可见性及本地自动兼容。源码可切换到 `v0.2.0` 标签获取。功能、依赖和已知限制见 [v0.2.0 发布说明](docs/release/v0.2.0.md)。
+本版本包含工作台定位、深色线稿笔触、页面可见性及本地自动兼容。源码可切换到 `v0.2.1` 标签获取。功能、依赖和已知限制见 [v0.2.1 发布说明](docs/release/v0.2.1.md)。
 
 干净电脑与完整真实功能验收仍待补齐；第三方素材的公开再分发条款尚未完整归档，代码 MIT 许可不覆盖这些素材。正式版不扩大已验证范围，详见 [验证记录](docs/validation/2026-11-03-stable-release.md) 与 [NOTICE](companion/NOTICE.md)。
 
@@ -109,7 +109,7 @@ GitHub 自动生成的 `Source code (zip)` 是指定提交的源码快照，不�
 推荐下载 [正式版 ZIP](https://github.com/jingtll/codex-eva-theme/releases/latest) 并完整解压。也可安装 Git 后获取源码：
 
 ```powershell
-git clone --branch v0.2.0 https://github.com/jingtll/codex-eva-theme.git
+git clone --branch v0.2.1 https://github.com/jingtll/codex-eva-theme.git
 cd codex-eva-theme
 ```
 
@@ -278,3 +278,5 @@ LICENSE                 本仓库代码许可
 再次感谢 [seaison/dsh-plugin-eva-theme](https://github.com/seaison/dsh-plugin-eva-theme) 及其作者。本仓库的 Codex 适配建立在原项目的主题方向与参考资源之上；请保留原项目来源与适用的许可声明。
 
 本仓库代码采用 [MIT License](LICENSE)。EVA 角色、品牌、图像与语音相关权利归相应权利人所有，代码许可不替代第三方素材授权。随包七项素材的来源、SHA-256 及尚待补齐的授权记录见 [NOTICE](companion/NOTICE.md)。
+
+面板位置：拖住右上角面板的角色标题区域移动，松手自动保存。窗口或组件缩放后会限制在工作区内；在显示设置中点击“恢复面板位置”可回到默认位置。标题区域也支持方向键移动、Home 恢复。
