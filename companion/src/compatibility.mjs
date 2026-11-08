@@ -28,7 +28,9 @@ export function recordCapabilities(cache,fingerprint,patch,now=Date.now()) {
       if(value)builds[key]={checkedAt:cache.builds[key].checkedAt,capabilities:value};
     }
   }
-  if(HASH.test(fingerprint||''))builds[fingerprint]={checkedAt:now,capabilities:{...builds[fingerprint]?.capabilities,...flags(patch)}};
+  // Keep the original observation window: appearance ticks must not extend old
+  // quota/event observations indefinitely. Expired entries above start afresh.
+  if(HASH.test(fingerprint||''))builds[fingerprint]={checkedAt:builds[fingerprint]?.checkedAt??now,capabilities:{...builds[fingerprint]?.capabilities,...flags(patch)}};
   return {schemaVersion:1,builds:Object.fromEntries(Object.entries(builds).sort((a,b)=>b[1].checkedAt-a[1].checkedAt).slice(0,8))};
 }
 

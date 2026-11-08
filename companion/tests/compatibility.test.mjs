@@ -17,6 +17,8 @@ test('capability cache is versioned, bounded, expires, and contains only flags',
   assert.equal(readCapabilities(cache,fingerprint,100+8*86400000),null);
   assert.equal(readCapabilities({...cache,schemaVersion:99},fingerprint,101),null);
   assert.equal(readCapabilities(cache,fingerprint,99),null);
+  const refreshed=recordCapabilities(cache,fingerprint,{appearance:true},100+6*86400000);
+  assert.equal(readCapabilities(refreshed,fingerprint,100+8*86400000),null,'appearance cannot renew old quota observations');
   let many=cache;
   for(let i=0;i<30;i++)many=recordCapabilities(many,i.toString(16).padStart(64,'0'),{protocol:true},200+i);
   assert.ok(Object.keys(many.builds).length<=8);
