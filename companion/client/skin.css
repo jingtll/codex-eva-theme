@@ -33,3 +33,7 @@
   .pilot strong{font-size:13px}.clock time{font-size:25px}.caption{font-size:10px}.card{padding:8px}
   .settings{left:12px;right:12px;width:auto}
 }
+.pilot{pointer-events:auto;cursor:grab;touch-action:none;user-select:none}
+.pilot.dragging{cursor:grabbing}
+.pilot:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.pilot button{cursor:pointer}

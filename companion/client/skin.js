@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   window.__codexEva?.dispose();
-  const defaults = {backgroundStrength:0.18, scale:1, portrait:true, geometry:true, scanlines:true, clock:true, quota:true, music:true, sound:true, approvalSound:true, completedSound:true, volume:0.6};
+  const defaults = {backgroundStrength:0.18, scale:1, panelX:-1, panelY:-1, portrait:true, geometry:true, scanlines:true, clock:true, quota:true, music:true, sound:true, approvalSound:true, completedSound:true, volume:0.6};
   let settings = {...defaults, ...window.__EVA_SETTINGS__};
   let state = {quota:null, media:null, status:'已连接', stale:false};
   const assets = window.__EVA_ASSETS__ || {};
@@ -25,6 +25,9 @@
   shell.innerHTML = `<div class="scanlines" aria-hidden="true"></div><div class="geometry" aria-hidden="true"></div><img class="portrait" alt="" aria-hidden="true"><div class="rail"><header class="pilot"><img class="logo" alt="NERV"><div><small>PERSONAL CONTROL SYSTEM</small><strong data-name></strong><span data-status></span></div><button data-action="settings" title="显示设置" aria-label="显示设置">⚙</button></header><section class="card clock"><div class="caption">時刻管制 <span>LOCAL TIME</span></div><time data-clock></time><div class="clock-meta" data-date></div></section><section class="card quota"><div class="caption">残存稼働限界 <span>ACCOUNT QUOTA</span></div><div data-quota></div><div class="quota-footer"><span data-updated></span><button data-action="refresh" aria-label="刷新额度">↻</button></div><details><summary>额度详情</summary><div data-quota-detail></div></details></section><section class="card music" hidden><div class="caption">音声管制 <span>NOW PLAYING</span></div><strong data-track></strong><div class="muted" data-artist></div><div class="controls"><button data-action="previous" aria-label="上一首">◀</button><button data-action="playpause" aria-label="播放或暂停">Ⅱ / ▶</button><button data-action="next" aria-label="下一首">▶</button></div></section></div><section class="settings card" data-settings hidden aria-label="显示设置"><div class="caption">表示設定 <button data-action="close-settings" aria-label="关闭显示设置">×</button></div><div data-fields></div><div class="controls"><button data-action="test-approval">试听审核</button><button data-action="test-completed">试听完成</button></div><button data-action="reset">恢复全部默认</button></section>`;
   shadow.append(shell); document.body.append(root);
   const $ = selector => shadow.querySelector(selector);
+  const panel=$('.rail'),handle=$('.pilot');
+  handle.tabIndex=0;handle.setAttribute('role','group');handle.setAttribute('aria-label','拖动面板；方向键移动，Home 恢复位置');handle.title='拖动面板；方向键移动，Home 恢复位置';
+  const resetPosition=document.createElement('button');resetPosition.dataset.action='reset-position';resetPosition.textContent='恢复面板位置';$('[data-settings]').append(resetPosition);
   const text = (selector,value) => {$(selector).textContent = String(value ?? '');};
   const send = (action, data={}) => {try {window.__evaCommand?.(JSON.stringify({action,...data}));} catch {text('[data-status]','本机连接不可用');}};
   let pilot = 'asuka'; let disposed=false;
@@ -44,7 +47,7 @@
       const v=patch[key];
       if (typeof defaults[key]==='boolean' && typeof v==='boolean') settings[key]=v;
       if (typeof defaults[key]==='number' && Number.isFinite(v)) {
-        const ranges={backgroundStrength:[0,0.5],scale:[0.6,1.6],volume:[0,1]};
+        const ranges={backgroundStrength:[0,0.5],scale:[0.6,1.6],volume:[0,1],panelX:[-1,1],panelY:[-1,1]};
         const [min,max]=ranges[key];settings[key]=Math.max(min,Math.min(max,v));
       }
     }
@@ -53,6 +56,7 @@
     for (const key of ['portrait','geometry','scanlines','clock','quota']) $('.'+key).hidden=!settings[key];
     $('.music').hidden=!settings.music || !state.media?.available;
     shadow.querySelectorAll('[data-setting]').forEach(input=>{const v=settings[input.dataset.setting];if(input.type==='checkbox')input.checked=v;else input.value=v;});
+    queueLayout();
   }
   function theme() {
     pilot = document.documentElement.dataset.theme==='light' ? 'rei' : 'asuka';
@@ -113,6 +117,44 @@
     return b.width>0&&b.height>0&&getComputedStyle(element).visibility!=='hidden';
   }
   let layoutFrame=0,layoutTargets=[];
+  let drag=null;
+  const clamp=(v,max)=>Math.max(0,Math.min(max,v));
+  function panelLimits(){return {x:Math.max(0,root.clientWidth-panel.offsetWidth*settings.scale),y:Math.max(0,root.clientHeight-panel.offsetHeight*settings.scale)};}
+  function placePanel(){
+    const custom=settings.panelX>=0&&settings.panelY>=0;
+    panel.style.maxWidth=`${Math.max(1,root.clientWidth-16)/settings.scale}px`;
+    panel.style.maxHeight=`${Math.max(1,root.clientHeight-(custom?16:64))/settings.scale}px`;
+    if(custom){
+      const limit=panelLimits();panel.style.transformOrigin='left top';panel.style.right='auto';
+      panel.style.left=`${settings.panelX*limit.x}px`;panel.style.top=`${settings.panelY*limit.y}px`;
+    }else{for(const key of ['left','top','right','transform-origin'])panel.style.removeProperty(key);}
+  }
+  function movePanel(x,y){
+    const limit=panelLimits();settings.panelX=limit.x?clamp(x,limit.x)/limit.x:0;settings.panelY=limit.y?clamp(y,limit.y)/limit.y:0;placePanel();
+  }
+  function savePanel(){send('settings',{settings:{panelX:settings.panelX,panelY:settings.panelY}});}
+  function resetPanel(){settings.panelX=-1;settings.panelY=-1;placePanel();savePanel();}
+  function pointerDown(event){
+    if(event.button!==0||event.target.closest('button,input,summary')||drag)return;
+    const r=root.getBoundingClientRect(),p=panel.getBoundingClientRect();
+    drag={id:event.pointerId,x:event.clientX,y:event.clientY,left:(p.left-r.left)*root.clientWidth/r.width,top:(p.top-r.top)*root.clientHeight/r.height,ratioX:root.clientWidth/r.width,ratioY:root.clientHeight/r.height,oldX:settings.panelX,oldY:settings.panelY};
+    handle.setPointerCapture(event.pointerId);handle.classList.add('dragging');event.preventDefault();
+  }
+  function pointerMove(event){if(drag&&event.pointerId===drag.id){movePanel(drag.left+(event.clientX-drag.x)*drag.ratioX,drag.top+(event.clientY-drag.y)*drag.ratioY);event.preventDefault();}}
+  function pointerEnd(event){
+    if(!drag||event.pointerId!==drag.id)return;
+    if(event.type==='pointercancel'){settings.panelX=drag.oldX;settings.panelY=drag.oldY;placePanel();}
+    else savePanel();
+    const id=drag.id;drag=null;handle.classList.remove('dragging');if(handle.hasPointerCapture(id))handle.releasePointerCapture(id);
+  }
+  function panelKey(event){
+    if(event.target!==handle)return;
+    if(event.key==='Home'){resetPanel();event.preventDefault();return;}
+    const d={ArrowLeft:[-10,0],ArrowRight:[10,0],ArrowUp:[0,-10],ArrowDown:[0,10]}[event.key];if(!d)return;
+    const r=root.getBoundingClientRect(),p=panel.getBoundingClientRect();movePanel((p.left-r.left)*root.clientWidth/r.width+d[0],(p.top-r.top)*root.clientHeight/r.height+d[1]);savePanel();event.preventDefault();
+  }
+  handle.addEventListener('pointerdown',pointerDown);window.addEventListener('pointermove',pointerMove);
+  window.addEventListener('pointerup',pointerEnd);window.addEventListener('pointercancel',pointerEnd);handle.addEventListener('lostpointercapture',pointerEnd);handle.addEventListener('keydown',panelKey);
   const layoutResize=new ResizeObserver(queueLayout);
   function queueLayout(){if(!disposed&&!layoutFrame)layoutFrame=requestAnimationFrame(()=>{layoutFrame=0;layout();});}
   function layout(){
@@ -146,7 +188,8 @@
     if(root.style.zoom!==zoom)root.style.zoom=zoom;
     const inset=`${top}px ${Math.max(0,innerWidth-right)}px ${Math.max(0,innerHeight-bottom)}px ${left}px`;
     if(root.style.inset!==inset)root.style.inset=inset;
-    const targets=[surface].filter(Boolean);
+    placePanel();
+    const targets=[surface,panel].filter(Boolean);
     if(targets.length!==layoutTargets.length||targets.some((target,index)=>target!==layoutTargets[index])){
       layoutResize.disconnect();layoutTargets=targets;targets.forEach(target=>layoutResize.observe(target));
     }
@@ -160,6 +203,7 @@
     if (action==='settings') $('[data-settings]').hidden=false;
     else if(action==='close-settings') { $('[data-settings]').hidden=true; modalTick(); }
     else if(action==='reset'){settings={...defaults};applySettings();send('settings',{settings});}
+    else if(action==='reset-position')resetPanel();
     else if(action.startsWith('test-'))send('cue',{kind:action.slice(5),pilot});
     else if(['playpause','next','previous'].includes(action))send('media',{command:action,sourceId:state.media?.sourceId});
     else if(action==='refresh')send('refresh');
@@ -177,6 +221,6 @@
   const modalObserver=new MutationObserver(modalTick);modalObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal']});
   const interval=setInterval(()=>{clock();if(state.quota)renderQuota();},1000);
   window.__codexEva={updateState,setSettings:patch=>applySettings(patch),openSettings:()=>{$('[data-settings]').hidden=false;modalTick();},getSettings:()=>({...settings}),getPilot:()=>pilot,
-    dispose(){if(disposed)return;disposed=true;clearInterval(interval);cancelAnimationFrame(layoutFrame);layoutResize.disconnect();layoutMutations.disconnect();window.removeEventListener('resize',queueLayout);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
+    dispose(){if(disposed)return;disposed=true;window.removeEventListener('pointermove',pointerMove);window.removeEventListener('pointerup',pointerEnd);window.removeEventListener('pointercancel',pointerEnd);clearInterval(interval);cancelAnimationFrame(layoutFrame);layoutResize.disconnect();layoutMutations.disconnect();window.removeEventListener('resize',queueLayout);themeObserver.disconnect();modalObserver.disconnect();shadow.removeEventListener('click',click);shadow.removeEventListener('change',change);root.remove();palette.remove();delete document.documentElement.dataset.evaPilot;delete window.__codexEva;}};
   applySettings(settings);theme();clock();hostModal();updateState();layout();
 })();

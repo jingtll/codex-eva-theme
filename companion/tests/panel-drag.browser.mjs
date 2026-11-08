@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {buildBundle} from '../src/bundle.mjs';
+import {openPage} from './browser-harness.mjs';
+
+test('panel drags, persists, stays reachable after scaling and resets without dragging buttons',{skip:!process.env.EVA_BROWSER_ENDPOINT},async t=>{
+ const h=await openPage('<html><body style="margin:0"><main style="margin-left:200px;height:800px"><textarea placeholder="chat"></textarea></main></body></html>');t.after(()=>h.close());
+ await h.resize(1400,850);
+ await h.evaluate('window.__commands=[];window.__evaCommand=s=>window.__commands.push(JSON.parse(s));window.electronBridge={}');
+ await h.evaluate(await buildBundle());
+ const box=selector=>h.evaluate(`document.querySelector('#codex-eva-root').shadowRoot.querySelector('${selector}').getBoundingClientRect().toJSON()`);
+ const before=await box('.rail'),header=await box('.pilot');
+ await h.page.send('Input.dispatchMouseEvent',{type:'mousePressed',x:header.x+50,y:header.y+12,button:'left',buttons:1,clickCount:1});
+ await h.page.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:header.x-300,y:header.y+180,buttons:1});
+ await h.page.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:header.x-300,y:header.y+180,button:'left',clickCount:1});
+ const moved=await box('.rail');assert.ok(moved.x<before.x-200);assert.ok(moved.y>before.y+100);
+ const settings=await h.evaluate('window.__codexEva.getSettings()');assert.ok(settings.panelX>=0&&settings.panelY>=0);
+ assert.equal(await h.evaluate('window.__commands.some(c=>c.action==="settings"&&c.settings.panelX>=0)'),true);
+ await h.evaluate(`window.__codexEva.dispose();window.__EVA_SETTINGS__=${JSON.stringify(settings)}`);await h.evaluate(await buildBundle(settings));
+ assert.ok(Math.abs((await box('.rail')).x-moved.x)<2,'saved position restored');
+ await h.evaluate('window.__codexEva.setSettings({scale:1.6})');await h.resize(650,450);
+ await h.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+ const small=await box('.rail');assert.ok(small.x>=199&&small.y>=0&&small.right<=651&&small.bottom<=451,JSON.stringify(small));
+ await h.evaluate(`document.querySelector('#codex-eva-root').shadowRoot.querySelector('[data-action=settings]').click()`);
+ assert.equal(await h.evaluate(`document.querySelector('#codex-eva-root').shadowRoot.querySelector('[data-settings]').hidden`),false);
+ await h.evaluate(`document.querySelector('#codex-eva-root').shadowRoot.querySelector('[data-action=reset-position]').click()`);
+ assert.equal(await h.evaluate('window.__codexEva.getSettings().panelX'),-1);
+});

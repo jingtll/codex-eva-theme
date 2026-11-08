@@ -19,6 +19,8 @@ const TRAY_ACTIONS = new Set(['pause', 'resume', 'open-settings', 'quit']);
 export const DEFAULTS = Object.freeze({
   backgroundStrength: 0.18,
   scale: 1,
+  panelX: -1,
+  panelY: -1,
   portrait: true,
   geometry: true,
   scanlines: true,
@@ -31,7 +33,7 @@ export const DEFAULTS = Object.freeze({
   volume: 0.6,
 });
 
-const RANGES = { backgroundStrength: [0, 0.5], scale: [0.6, 1.6], volume: [0, 1] };
+const RANGES = { backgroundStrength: [0, 0.5], scale: [0.6, 1.6], volume: [0, 1], panelX: [-1,1], panelY: [-1,1] };
 
 /** Keeps only known skin keys and coerces each to its declared range. */
 export function sanitizeSettings(patch, current = DEFAULTS) {

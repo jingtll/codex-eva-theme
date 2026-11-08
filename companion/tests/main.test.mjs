@@ -149,7 +149,7 @@ test('settings from the skin are validated, persisted, and handed to later sessi
   });
   await waitFor(() => received.length === 1);
   const first = received[0];
-  await first.setSettings({ volume: 0.3, scale: 99, bogusKey: true, music: false });
+  await first.setSettings({ volume: 0.3, scale: 99, panelX:0.3, panelY:0.4, bogusKey: true, music: false });
   const current = first.getSettings();
   assert.equal(current.volume, 0.3);
   assert.equal(current.scale, 1.6);
@@ -160,6 +160,7 @@ test('settings from the skin are validated, persisted, and handed to later sessi
   const saved = JSON.parse(await readFile(file, 'utf8'));
   assert.equal(saved.volume, 0.3);
   assert.equal(saved.scale, 1.6);
+  assert.equal(saved.panelX,0.3);assert.equal(saved.panelY,0.4);
 
   await instance.stop();
 
