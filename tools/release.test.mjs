@@ -35,8 +35,11 @@ test('download archive contains a runnable companion and no local installation d
   }
   const { buildBundle } = await import(pathToFileURL(join(root, 'companion/src/bundle.mjs')));
   assert.match(await buildBundle(), /data:image\/png;base64,/);
-  const { selectAdapter, MCP_VIEW_V1 } = await import(pathToFileURL(join(root, 'companion/src/adapters/index.mjs')));
-  assert.equal(selectAdapter({ fingerprint: MCP_VIEW_V1.fingerprints[0], probeRecord: await readFile(join(root, 'docs/validation/entry-probe.md'), 'utf8') }).status, 'verified');
+  const { selectAdapter, currentFingerprint } = await import(pathToFileURL(join(root, 'companion/src/adapters/index.mjs')));
+  const probeRecord=await readFile(join(root, 'docs/validation/entry-probe.md'), 'utf8');
+  assert.equal(selectAdapter({ fingerprint: currentFingerprint(probeRecord), probeRecord }).status, 'verified');
+  const {runtimeAdapter}=await import(pathToFileURL(join(root,'companion/src/compatibility.mjs')));
+  assert.equal(runtimeAdapter('a'.repeat(64)).runtimeProbe,true,'archive includes automatic compatibility runtime');
   execFileSync(process.execPath, ['tools/build.mjs', '--check'], { cwd: root, stdio: 'pipe' });
   execFileSync(process.execPath, ['tools/verify.mjs'], { cwd: root, stdio: 'pipe' });
   execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', join(root, 'companion/windows/build-launcher.ps1')], { stdio: 'pipe' });

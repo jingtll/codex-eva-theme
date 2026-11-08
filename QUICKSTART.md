@@ -1,4 +1,4 @@
-# Windows v0.1.0 使用说明
+# Windows v0.2.0 使用说明
 
 这是第三方 EVA 主题与伴随程序，不是 Codex 官方插件或独立客户端。
 
@@ -28,7 +28,7 @@
 在 ZIP 所在目录运行：
 
 ```powershell
-Get-FileHash .\codex-eva-theme-v0.1.0-windows.zip -Algorithm SHA256
+Get-FileHash .\codex-eva-theme-v0.2.0-windows.zip -Algorithm SHA256
 ```
 
 将结果与随包的 `SHA256SUMS.txt` 对比。解压后的 `release-manifest.json` 记录源提交和每个运行文件的摘要。
